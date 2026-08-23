@@ -1,0 +1,22 @@
+name: WagersPlugin
+version: 1.0.0
+main: com.example.wagers.WagersPlugin
+api-version: '1.20'
+depend: [Vault]
+softdepend: [PlaceholderAPI]
+description: Wager fights - challenge players, bet money, RTP to a random arena, countdown, winner takes the pot.
+author: You
+
+commands:
+  wager:
+    description: Wager system - fight players for money
+    usage: /wager <player> <amount> [mode] | accept | deny | modes | forfeit | messages | stats [player] | join | leave | event
+    aliases: [duel, bet]
+
+permissions:
+  wagers.use:
+    description: Use the wager system
+    default: true
+  wagers.bypass-commands:
+    description: Use any command while in a wager fight
+    default: op

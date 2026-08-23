@@ -1,0 +1,55 @@
+# WagersPlugin configuration
+
+# Seconds both players are frozen before the fight starts
+countdown-seconds: 5
+
+# Seconds before an unanswered wager request expires
+request-expire-seconds: 60
+
+# Wager amount limits
+min-wager: 1.0
+max-wager: 1000000.0
+
+# Announce fights + results to the whole server
+broadcast-fights: true
+
+rtp:
+  # World to teleport fights into. Leave empty ("") to use the challenger's current world.
+  world: ""
+  # Random teleport radius (blocks) around the world spawn
+  radius: 3000
+  # How far apart the two players spawn from each other
+  player-gap: 8
+
+# ---------------- Rotating Events ----------------
+events:
+  enabled: true
+  # Seconds between events (countdown shown in placeholders)
+  interval-seconds: 900
+  # How long the join window stays open after the announcement
+  join-seconds: 60
+  # Minimum players needed or the event is cancelled (fees refunded)
+  min-players: 2
+  # Max fight length; if time runs out it's a draw (fees refunded)
+  max-fight-seconds: 300
+  # Seconds per frame for the %wagers_event_animated% placeholder
+  animation-frame-seconds: 2
+  # Events cycle through this list in order, then loop back to the top.
+  # mode: CLASSIC, DIAMOND, NODEBUFF, SUMO, HARDCORE
+  rotation:
+    - name: "&b&lDiamond FFA"
+      mode: DIAMOND
+      prize: 5000
+      entry-fee: 0
+    - name: "&e&lSumo Showdown"
+      mode: SUMO
+      prize: 2500
+      entry-fee: 0
+    - name: "&d&lNoDebuff Rumble"
+      mode: NODEBUFF
+      prize: 7500
+      entry-fee: 50
+    - name: "&c&lHardcore Last Stand"
+      mode: HARDCORE
+      prize: 10000
+      entry-fee: 100

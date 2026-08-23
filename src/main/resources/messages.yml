@@ -1,0 +1,107 @@
+# WagersPlugin messages
+# Color codes with '&'. Available placeholders are noted per message.
+# Global: %prefix% works everywhere. If PlaceholderAPI is installed, its placeholders work here too.
+
+prefix: "&8[&6Wagers&8] &r"
+
+# Toggle command (/wager messages)
+messages-enabled: "%prefix%&7Wager messages: &a&lON"
+messages-disabled: "%prefix%&7Wager messages: &c&lOFF"
+
+# Errors / checks
+already-in-wager: "%prefix%&cYou're already in a wager fight!"
+target-in-wager: "%prefix%&c%player% is already in a wager fight."
+amount-positive: "%prefix%&cWager amount must be positive."
+amount-range: "%prefix%&cWager must be between &e%min% &cand &e%max%&c."
+not-enough-money: "%prefix%&cYou don't have &e%amount%&c!"
+player-not-found: "%prefix%&cPlayer not found."
+cant-wager-self: "%prefix%&cYou can't wager yourself."
+invalid-amount: "%prefix%&cInvalid amount: &e%input%"
+unknown-mode: "%prefix%&cUnknown mode. Modes: &b%modes%"
+no-pending-request: "%prefix%&cYou have no pending wager requests."
+sender-offline: "%prefix%&cThat player is no longer online."
+one-already-fighting: "%prefix%&cOne of you is already in a fight."
+insufficient-at-accept: "%prefix%&cOne of you no longer has enough money."
+insufficient-cancelled: "%prefix%&cWager cancelled — insufficient funds."
+no-safe-location: "%prefix%&cCouldn't find a safe arena spot. Wager refunded."
+not-in-fight: "%prefix%&cYou're not in a wager fight."
+players-only: "Players only."
+
+# Requests  |  %player% %amount% %pot% %mode%
+request-sent: "%prefix%&aWager sent to &e%player%&a: &6%amount% &7(%mode%)"
+request-received-header: "%prefix%&6&l⚔ WAGER CHALLENGE ⚔"
+request-received-body: "%prefix%&e%player% &7challenged you to a &b%mode% &7fight for &6%amount%&7!"
+request-received-footer: "%prefix%&7Winner takes &6%pot%&7. Type &a/wager accept &7or &c/wager deny&7."
+request-expired: "%prefix%&7Your wager request to that player expired."
+request-denied-target: "%prefix%&cWager denied."
+request-denied-sender: "%prefix%&c%player% denied your wager."
+
+# Fight  |  %player% %opponent% %winner% %loser% %amount% %pot% %mode% %reason% %seconds%
+fight-broadcast: "%prefix%&6&l⚔ WAGER FIGHT &7» &e%player% &7vs &e%opponent% &7— &b%mode% &7— pot: &6%pot%"
+win-broadcast: "%prefix%&6&l⚔ &e%winner% &7defeated &e%loser% &7in a &b%mode% &7wager and won &6%pot%&7! &8(%reason%)"
+countdown-title: "&6⚔ %seconds% ⚔"
+countdown-subtitle: "&7Fight for &6%pot%"
+fight-title: "&c&lFIGHT!"
+fight-subtitle: "&7Winner takes &6%pot%"
+victory-title: "&6&lVICTORY!"
+victory-subtitle: "&a+%pot%"
+
+# Protection
+target-protected: "%prefix%&cThat player is in a wager fight!"
+only-opponent: "%prefix%&cYou can only fight your wager opponent!"
+no-commands: "%prefix%&cYou can't use commands during a wager fight! (&e/wager forfeit &cto give up)"
+
+# Help
+help-header: "%prefix%&6&lWagers &7— fight for money!"
+help-challenge: "%prefix%&e/wager <player> <amount> [mode] &7- challenge someone"
+help-accept: "%prefix%&e/wager accept &7- accept a challenge"
+help-deny: "%prefix%&e/wager deny &7- deny a challenge"
+help-modes: "%prefix%&e/wager modes &7- list fight modes"
+help-forfeit: "%prefix%&e/wager forfeit &7- give up (opponent wins the pot)"
+help-toggle: "%prefix%&e/wager messages &7- toggle wager broadcasts &8(&aON&8/&cOFF&8)"
+help-stats: "%prefix%&e/wager stats [player] &7- view wager stats"
+
+# Modes list
+modes-header: "%prefix%&6Available wager modes:"
+modes-entry: "%prefix%  &b%mode% &8- &7%description%"
+
+# Stats  |  %player% %wins% %losses% %money_won% %money_lost% %net%
+stats-header: "%prefix%&6&l%player%'s Wager Stats"
+stats-wins: "%prefix%&7Wins: &a%wins%"
+stats-losses: "%prefix%&7Losses: &c%losses%"
+stats-money-won: "%prefix%&7Money won: &6%money_won%"
+stats-money-lost: "%prefix%&7Money lost: &c%money_lost%"
+stats-net: "%prefix%&7Net profit: &e%net%"
+
+# Events  |  %event% %time% %prize% %mode% %players% %min%
+event-announce-header: "%prefix%&6&l⚡ EVENT STARTING ⚡"
+event-announce-body: "%prefix%&r%event% &7— &b%mode% &7— prize: &6%prize%"
+event-announce-time: "%prefix%&7Join window closes in &e%time%&7!"
+event-join-button: "&a&l[CLICK TO JOIN]"
+event-join-hover: "&7Click to join &r%event%&7!\n&7Prize: &6%prize%\n&7Entry fee: &c%fee%"
+event-joined: "%prefix%&aYou joined &r%event%&a! &7(%players% joined)"
+event-join-broadcast: "%prefix%&e%player% &7joined &r%event% &7(&a%players%&7)"
+event-already-joined: "%prefix%&cYou already joined this event."
+event-not-joinable: "%prefix%&cThere's no event to join right now."
+event-in-wager: "%prefix%&cYou can't join an event while in a wager fight."
+event-fee-needed: "%prefix%&cYou need &e%fee% &cto enter this event."
+event-left: "%prefix%&cYou left the event. Entry fee refunded."
+event-not-in: "%prefix%&cYou're not in the event."
+event-cancelled: "%prefix%&cEvent cancelled — needed at least &e%min% &cplayers. Fees refunded."
+event-started: "%prefix%&6&l⚡ &r%event% &7has begun with &e%players% &7fighters! Last one standing wins &6%prize%&7!"
+event-eliminated: "%prefix%&c✖ &e%player% &7was eliminated from &r%event% &7— &e%players% &7left!"
+event-winner: "%prefix%&6&l⚡ &e%player% &7won &r%event% &7and the &6%prize% &7prize!"
+event-draw: "%prefix%&7Time ran out — &r%event% &7ended in a draw. Fees refunded."
+event-winner-title: "&6&lEVENT WINNER!"
+event-winner-subtitle: "&a+%prize%"
+event-info-header: "%prefix%&6&lNext Event"
+event-info-name: "%prefix%&7Event: &r%event%"
+event-info-mode: "%prefix%&7Mode: &b%mode%"
+event-info-prize: "%prefix%&7Prize: &6%prize%"
+event-info-status: "%prefix%&7Status: &e%status%"
+event-info-time: "%prefix%&7Time: &e%time%"
+event-status-waiting: "&7Waiting"
+event-status-joining: "&a&lJOINABLE"
+event-status-running: "&c&lLIVE"
+help-join: "%prefix%&e/wager join &7- join the current event"
+help-event: "%prefix%&e/wager event &7- next event info"
