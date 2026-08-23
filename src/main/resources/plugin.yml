@@ -17,6 +17,9 @@ permissions:
   wagers.use:
     description: Use the wager system
     default: true
+  wagers.admin:
+    description: Reload the plugin config with /wager reload
+    default: op
   wagers.bypass-commands:
     description: Use any command while in a wager fight
     default: op

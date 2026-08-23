@@ -10,14 +10,22 @@ request-expire-seconds: 60
 min-wager: 1.0
 max-wager: 1000000.0
 
+# Abbreviate money everywhere: $5,000,000 shows as $5M, $1,500 as $1.5K
+# (K = thousand, M = million, B = billion, T = trillion, Q = quadrillion)
+# Set to false for full numbers.
+abbreviate-money: true
+
 # Announce fights + results to the whole server
 broadcast-fights: true
 
 rtp:
   # World to teleport fights into. Leave empty ("") to use the challenger's current world.
   world: ""
-  # Random teleport radius (blocks) around the world spawn
-  radius: 3000
+  # Random teleport radius (blocks) around the world spawn.
+  # Keep this within terrain that's already generated! The plugin will never
+  # generate new chunks (that lags the server), so if the area isn't
+  # pregenerated it falls back to spots near spawn/players.
+  radius: 500
   # How far apart the two players spawn from each other
   player-gap: 8
 

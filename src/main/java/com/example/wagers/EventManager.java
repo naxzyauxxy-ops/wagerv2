@@ -253,8 +253,13 @@ public class EventManager {
             double angle = (2 * Math.PI / alive.size()) * i++;
             int x = center.getBlockX() + (int) Math.round(Math.cos(angle) * radius);
             int z = center.getBlockZ() + (int) Math.round(Math.sin(angle) * radius);
-            int y = center.getWorld().getHighestBlockYAt(x, z);
-            Location spot = new Location(center.getWorld(), x + 0.5, y + 1, z + 0.5);
+            Location spot;
+            if (center.getWorld().isChunkGenerated(x >> 4, z >> 4)) {
+                int y = center.getWorld().getHighestBlockYAt(x, z);
+                spot = new Location(center.getWorld(), x + 0.5, y + 1, z + 0.5);
+            } else {
+                spot = center.clone().add((i % 3) - 1, 0, (i % 5) - 2);
+            }
             spot.setDirection(center.toVector().subtract(spot.toVector()));
             p.teleport(spot);
             if (e.mode().usesKit()) e.mode().applyKit(p);

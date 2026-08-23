@@ -318,9 +318,18 @@ public class WagerManager {
         int radius = plugin.getConfig().getInt("rtp.radius", 3000);
         Location spawn = world.getSpawnLocation();
 
-        for (int attempt = 0; attempt < 25; attempt++) {
+        // Pass 1 (attempts 0-24): only chunks already loaded in memory - zero cost.
+        // Pass 2 (attempts 25-39): chunks already generated on disk - cheap load, no worldgen.
+        // We NEVER generate new terrain here; that is what causes TPS drops.
+        for (int attempt = 0; attempt < 40; attempt++) {
             int x = spawn.getBlockX() + ThreadLocalRandom.current().nextInt(-radius, radius + 1);
             int z = spawn.getBlockZ() + ThreadLocalRandom.current().nextInt(-radius, radius + 1);
+            int cx = x >> 4, cz = z >> 4;
+            if (attempt < 25) {
+                if (!world.isChunkLoaded(cx, cz)) continue;
+            } else {
+                if (!world.isChunkGenerated(cx, cz)) continue;
+            }
             int y = world.getHighestBlockYAt(x, z);
             Block ground = world.getBlockAt(x, y, z);
             Material type = ground.getType();
@@ -337,6 +346,9 @@ public class WagerManager {
         World world = center.getWorld();
         int x = center.getBlockX() + gap;
         int z = center.getBlockZ();
+        if (!world.isChunkGenerated(x >> 4, z >> 4)) {
+            return center.clone().add(2, 0, 0);
+        }
         int y = world.getHighestBlockYAt(x, z);
         Material ground = world.getBlockAt(x, y, z).getType();
         if (ground == Material.WATER || ground == Material.LAVA || !ground.isSolid()) {
@@ -366,7 +378,34 @@ public class WagerManager {
     public Wager getWager(UUID id) { return activeWagers.get(id); }
     public boolean isFrozen(UUID id) { return frozen.contains(id); }
 
+    private static final String[] SUFFIXES = {"", "K", "M", "B", "T", "Q"};
+
+    /** Format money: $1,000 -> $1K, $5,000,000 -> $5M, $2,500,000,000 -> $2.5B */
     public static String fmt(double amount) {
-        return "$" + (amount == Math.floor(amount) ? String.valueOf((long) amount) : String.format("%.2f", amount));
+        WagersPlugin pl = WagersPlugin.get();
+        boolean abbreviate = pl == null || pl.getConfig().getBoolean("abbreviate-money", true);
+        boolean negative = amount < 0;
+        double abs = Math.abs(amount);
+
+        if (!abbreviate || abs < 1000) {
+            String plain = abs == Math.floor(abs) ? String.valueOf((long) abs) : String.format("%.2f", abs);
+            return (negative ? "-$" : "$") + plain;
+        }
+
+        int tier = 0;
+        while (abs >= 1000 && tier < SUFFIXES.length - 1) {
+            abs /= 1000;
+            tier++;
+        }
+        // Rounding can push 999.99K up to 1000K - bump to the next tier
+        if (Math.round(abs * 100) >= 100000 && tier < SUFFIXES.length - 1) {
+            abs /= 1000;
+            tier++;
+        }
+        // Up to 2 decimals, trimming trailing zeros: 5M, 1.5K, 2.25B
+        String num = String.format("%.2f", abs)
+                .replaceAll("0+$", "")
+                .replaceAll("\\.$", "");
+        return (negative ? "-$" : "$") + num + SUFFIXES[tier];
     }
 }

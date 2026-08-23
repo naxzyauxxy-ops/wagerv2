@@ -66,6 +66,15 @@ public class WagerCommand implements CommandExecutor, TabCompleter {
                 msgs().send(player, "stats-money-lost", "%money_lost%", WagerManager.fmt(pd.getMoneyLost(id)));
                 msgs().send(player, "stats-net", "%net%", WagerManager.fmt(net));
             }
+            case "reload" -> {
+                if (!player.hasPermission("wagers.admin")) {
+                    help(player);
+                    return true;
+                }
+                plugin.reloadConfig();
+                plugin.getMessages().reload();
+                player.sendMessage(plugin.getMessages().getPrefix() + "§aConfig and messages reloaded.");
+            }
             case "join" -> plugin.getEventManager().join(player);
             case "leave" -> plugin.getEventManager().leave(player);
             case "event" -> {
@@ -141,7 +150,7 @@ public class WagerCommand implements CommandExecutor, TabCompleter {
     @Override
     public List<String> onTabComplete(CommandSender sender, Command command, String alias, String[] args) {
         if (args.length == 1) {
-            List<String> out = new ArrayList<>(Arrays.asList("accept", "deny", "modes", "forfeit", "messages", "stats", "join", "leave", "event"));
+            List<String> out = new ArrayList<>(Arrays.asList("accept", "deny", "modes", "forfeit", "messages", "stats", "join", "leave", "event", "reload"));
             Bukkit.getOnlinePlayers().forEach(p -> out.add(p.getName()));
             return filter(out, args[0]);
         }
