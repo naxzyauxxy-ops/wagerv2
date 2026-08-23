@@ -157,7 +157,7 @@ public class EventManager {
         String prefix = msgs().getPrefix();
         TextComponent button = new TextComponent(TextComponent.fromLegacyText(
                 prefix + msgs().get("event-join-button", p)));
-        button.setClickEvent(new ClickEvent(ClickEvent.Action.RUN_COMMAND, "/wager join"));
+        button.setClickEvent(new ClickEvent(ClickEvent.Action.RUN_COMMAND, "/wagersplugin:wager join"));
         String hover = msgs().get("event-join-hover", p,
                 "%event%", e.name(), "%prize%", WagerManager.fmt(e.prize()),
                 "%fee%", WagerManager.fmt(e.entryFee()));
