@@ -46,7 +46,12 @@ public class WagersPlugin extends JavaPlugin {
             getLogger().info("Hooked into PlaceholderAPI - %wagers_...% placeholders registered.");
         }
 
-        getLogger().info("WagersPlugin enabled. Modes: " + WagerMode.list());
+        getLogger().info("=====================================");
+        getLogger().info(" WagersPlugin v" + getDescription().getVersion() + " BUILD 7 (hard-freeze)");
+        getLogger().info(" Modes: " + WagerMode.list());
+        getLogger().info(" If this line is missing from your log, the");
+        getLogger().info(" server is running an OLD jar.");
+        getLogger().info("=====================================");
     }
 
     @Override

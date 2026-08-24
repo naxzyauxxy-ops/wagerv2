@@ -3,7 +3,9 @@ package com.example.wagers;
 import org.bukkit.*;
 import org.bukkit.block.Block;
 import org.bukkit.entity.Player;
+import org.bukkit.potion.PotionEffect;
 import org.bukkit.potion.PotionEffectType;
+import org.bukkit.util.Vector;
 import org.bukkit.scheduler.BukkitRunnable;
 import org.bukkit.scheduler.BukkitTask;
 
@@ -21,6 +23,8 @@ public class WagerManager {
     private final Map<UUID, Wager> activeWagers = new HashMap<>();
     /** Frozen players -> the exact spot they must stay on during countdown. */
     private final Map<UUID, Location> frozen = new HashMap<>();
+    private final Map<UUID, Float> savedWalkSpeed = new HashMap<>();
+    private final Map<UUID, Float> savedFlySpeed = new HashMap<>();
     private final Map<Wager, BukkitTask> countdownTasks = new HashMap<>();
     /** Players the plugin is currently teleporting itself (exempt from escape blocking). */
     private final Set<UUID> pluginTeleporting = new HashSet<>();
@@ -181,8 +185,8 @@ public class WagerManager {
             mode.applyKit(target);
         }
 
-        frozen.put(sender.getUniqueId(), sender.getLocation().clone());
-        frozen.put(target.getUniqueId(), target.getLocation().clone());
+        applyFreeze(sender, sender.getLocation());
+        applyFreeze(target, target.getLocation());
         startCountdown(wager, sender, target);
     }
 
@@ -212,8 +216,8 @@ public class WagerManager {
                     remaining--;
                 } else {
                     wager.setState(Wager.State.FIGHTING);
-                    frozen.remove(wager.getPlayer1());
-                    frozen.remove(wager.getPlayer2());
+                    releaseFreeze(wager.getPlayer1());
+                    releaseFreeze(wager.getPlayer2());
                     for (Player p : List.of(a, b)) {
                         p.sendTitle(
                                 msgs().get("fight-title", p),
@@ -240,8 +244,8 @@ public class WagerManager {
         BukkitTask task = countdownTasks.remove(wager);
         if (task != null) task.cancel();
 
-        frozen.remove(wager.getPlayer1());
-        frozen.remove(wager.getPlayer2());
+        releaseFreeze(wager.getPlayer1());
+        releaseFreeze(wager.getPlayer2());
         activeWagers.remove(wager.getPlayer1());
         activeWagers.remove(wager.getPlayer2());
 
@@ -298,8 +302,8 @@ public class WagerManager {
         plugin.getEconomy().depositPlayer(Bukkit.getOfflinePlayer(wager.getPlayer2()), wager.getAmount());
         activeWagers.remove(wager.getPlayer1());
         activeWagers.remove(wager.getPlayer2());
-        frozen.remove(wager.getPlayer1());
-        frozen.remove(wager.getPlayer2());
+        releaseFreeze(wager.getPlayer1());
+        releaseFreeze(wager.getPlayer2());
         for (UUID id : List.of(wager.getPlayer1(), wager.getPlayer2())) {
             Player p = Bukkit.getPlayer(id);
             if (p != null) msgs().send(p, messageKey);
@@ -320,6 +324,7 @@ public class WagerManager {
         });
         plugin.getBettingManager().refundAllOpen();
         plugin.getSpectatorManager().restoreAll();
+        for (UUID id : new HashSet<>(frozen.keySet())) releaseFreeze(id);
         activeWagers.clear();
         frozen.clear();
         countdownTasks.values().forEach(BukkitTask::cancel);
@@ -424,6 +429,43 @@ public class WagerManager {
 
     public boolean isInWager(UUID id) { return activeWagers.containsKey(id); }
     public Wager getWager(UUID id) { return activeWagers.get(id); }
+    /**
+     * Lock a player in place for the countdown. Belt and braces: anchor +
+     * zero walk/fly speed + max slowness + jump suppression + cleared velocity.
+     * Move cancellation alone lets sprint momentum slip through.
+     */
+    public void applyFreeze(Player p, Location anchor) {
+        UUID id = p.getUniqueId();
+        frozen.put(id, anchor.clone());
+
+        savedWalkSpeed.putIfAbsent(id, p.getWalkSpeed());
+        savedFlySpeed.putIfAbsent(id, p.getFlySpeed());
+
+        p.setSprinting(false);
+        p.setSneaking(false);
+        p.setVelocity(new Vector(0, 0, 0));
+        p.setFallDistance(0f);
+        p.setWalkSpeed(0f);
+        p.setFlySpeed(0f);
+        p.addPotionEffect(new PotionEffect(PotionEffectType.SLOW, Integer.MAX_VALUE, 255, false, false, false));
+        p.addPotionEffect(new PotionEffect(PotionEffectType.JUMP, Integer.MAX_VALUE, 128, false, false, false));
+    }
+
+    /** Release a frozen player and give their normal movement back. */
+    public void releaseFreeze(UUID id) {
+        if (frozen.remove(id) == null) return;
+        Player p = Bukkit.getPlayer(id);
+        Float walk = savedWalkSpeed.remove(id);
+        Float fly = savedFlySpeed.remove(id);
+        if (p == null) return;
+        p.setWalkSpeed(walk != null ? walk : 0.2f);
+        p.setFlySpeed(fly != null ? fly : 0.1f);
+        p.removePotionEffect(PotionEffectType.SLOW);
+        p.removePotionEffect(PotionEffectType.JUMP);
+        p.setVelocity(new Vector(0, 0, 0));
+        p.setFallDistance(0f);
+    }
+
     public boolean isFrozen(UUID id) { return frozen.containsKey(id); }
 
     /** The anchor a frozen player is pinned to, or null if not frozen. */

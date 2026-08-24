@@ -21,6 +21,7 @@ import org.bukkit.event.player.PlayerTeleportEvent;
 import org.bukkit.event.player.PlayerCommandPreprocessEvent;
 import org.bukkit.event.player.PlayerMoveEvent;
 import org.bukkit.event.player.PlayerQuitEvent;
+import org.bukkit.event.player.PlayerVelocityEvent;
 import org.bukkit.event.player.PlayerRespawnEvent;
 
 import java.util.HashMap;
@@ -123,6 +124,13 @@ public class FightListener implements Listener {
         if (em().isParticipantAlive(p.getUniqueId()) && em().getState() == EventManager.State.COUNTDOWN) {
             event.setCancelled(true);
         }
+    }
+
+    /** Knockback and explosions must not shove a frozen player off their spot. */
+    @EventHandler(ignoreCancelled = true, priority = EventPriority.HIGHEST)
+    public void onFrozenVelocity(PlayerVelocityEvent event) {
+        if (!wm().isFrozen(event.getPlayer().getUniqueId())) return;
+        event.setCancelled(true);
     }
 
     /* Hardcore mode: no natural regen. */

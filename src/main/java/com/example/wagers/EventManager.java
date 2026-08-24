@@ -38,8 +38,6 @@ public class EventManager {
 
     private final Set<UUID> participants = new LinkedHashSet<>();
     private final Set<UUID> alive = new HashSet<>();
-    /** Frozen players -> the exact spot they must stay on during countdown. */
-    private final Map<UUID, Location> frozen = new HashMap<>();
     private final Map<UUID, ItemStack[]> savedInv = new HashMap<>();
     private final Map<UUID, ItemStack[]> savedArmor = new HashMap<>();
     private final Map<UUID, Location> savedLoc = new HashMap<>();
@@ -107,7 +105,7 @@ public class EventManager {
                     }
                 } else {
                     state = State.RUNNING;
-                    frozen.clear();
+                    for (UUID id : alive) plugin.getWagerManager().releaseFreeze(id);
                     fightSecondsLeft = plugin.getConfig().getInt("events.max-fight-seconds", 300);
                     for (UUID id : alive) {
                         Player p = Bukkit.getPlayer(id);
@@ -261,7 +259,7 @@ public class EventManager {
                 Location arenaSpot = plugin.getArenaManager()
                         .spreadSpawns(arena, alive.size()).get(i++);
                 plugin.getWagerManager().safeTeleport(p, arenaSpot);
-                frozen.put(id, p.getLocation().clone());
+                plugin.getWagerManager().applyFreeze(p, p.getLocation());
                 if (e.mode().usesKit()) e.mode().applyKit(p);
                 continue;
             }
@@ -277,7 +275,7 @@ public class EventManager {
             }
             spot.setDirection(center.toVector().subtract(spot.toVector()));
             plugin.getWagerManager().safeTeleport(p, spot);
-            frozen.put(id, p.getLocation().clone());
+            plugin.getWagerManager().applyFreeze(p, p.getLocation());
             if (e.mode().usesKit()) e.mode().applyKit(p);
         }
 
@@ -372,7 +370,7 @@ public class EventManager {
         index = (index + 1) % Math.max(1, rotation.size());
         participants.clear();
         alive.clear();
-        frozen.clear();
+        for (UUID id : alive) plugin.getWagerManager().releaseFreeze(id);
         savedInv.clear();
         savedArmor.clear();
         savedLoc.clear();
@@ -395,10 +393,10 @@ public class EventManager {
 
     public State getState() { return state; }
     public boolean isParticipantAlive(UUID id) { return alive.contains(id); }
-    public boolean isFrozen(UUID id) { return frozen.containsKey(id); }
+    public boolean isFrozen(UUID id) { return plugin.getWagerManager().isFrozen(id); }
 
     /** The anchor a frozen event fighter is pinned to, or null. */
-    public Location getFrozenLocation(UUID id) { return frozen.get(id); }
+    public Location getFrozenLocation(UUID id) { return plugin.getWagerManager().getFrozenLocation(id); }
     public int getAliveCount() { return alive.size(); }
     public int getJoinedCount() { return participants.size(); }
     public double pot() { return (current() == null ? 0 : current().prize()) + feePot; }
