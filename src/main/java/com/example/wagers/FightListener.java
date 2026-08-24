@@ -45,16 +45,24 @@ public class FightListener implements Listener {
         return plugin.getEventManager();
     }
 
-    /* Freeze players during the pre-fight countdown (rotation still allowed). */
-    @EventHandler(ignoreCancelled = true)
+    /**
+     * Freeze players during the pre-fight countdown. Pins them to the exact
+     * spot they spawned on (looking around is still allowed) - comparing
+     * from/to let players slide with sprint momentum, so we anchor instead.
+     */
+    @EventHandler(ignoreCancelled = true, priority = EventPriority.HIGHEST)
     public void onMove(PlayerMoveEvent event) {
-        java.util.UUID moveId = event.getPlayer().getUniqueId();
-        if (!wm().isFrozen(moveId) && !em().isFrozen(moveId)) return;
-        if (event.getFrom().getX() != event.getTo().getX()
-                || event.getFrom().getZ() != event.getTo().getZ()
-                || event.getTo().getY() > event.getFrom().getY()) {
-            event.setTo(event.getFrom().clone().setDirection(event.getTo().getDirection()));
-        }
+        UUID moveId = event.getPlayer().getUniqueId();
+
+        Location anchor = wm().getFrozenLocation(moveId);
+        if (anchor == null) anchor = em().getFrozenLocation(moveId);
+        if (anchor == null) return;
+        if (event.getTo() == null) return;
+
+        Location pinned = anchor.clone();
+        pinned.setYaw(event.getTo().getYaw());
+        pinned.setPitch(event.getTo().getPitch());
+        event.setTo(pinned);
     }
 
     /* Only the two participants can hurt each other; nobody hurts them during countdown. */
@@ -212,12 +220,14 @@ public class FightListener implements Listener {
     private boolean blockEscapes(Player p) {
         String mode = plugin.getConfig().getString("block-escape-items", "countdown").toLowerCase();
         if (mode.equals("never") || mode.equals("false")) return false;
+        // Legacy configs stored this as a boolean; "true" now means countdown-only
+        if (mode.equals("true")) mode = "countdown";
 
         Wager w = wm().getWager(p.getUniqueId());
         boolean inEvent = em().isParticipantAlive(p.getUniqueId());
         if (w == null && !inEvent) return false;
 
-        if (mode.equals("always") || mode.equals("true")) return true;
+        if (mode.equals("always")) return true;
 
         // "countdown": only while the pre-fight countdown is still running
         boolean wagerCountdown = w != null && w.getState() == Wager.State.COUNTDOWN;

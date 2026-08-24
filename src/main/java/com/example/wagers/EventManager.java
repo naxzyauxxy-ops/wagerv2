@@ -38,7 +38,8 @@ public class EventManager {
 
     private final Set<UUID> participants = new LinkedHashSet<>();
     private final Set<UUID> alive = new HashSet<>();
-    private final Set<UUID> frozen = new HashSet<>();
+    /** Frozen players -> the exact spot they must stay on during countdown. */
+    private final Map<UUID, Location> frozen = new HashMap<>();
     private final Map<UUID, ItemStack[]> savedInv = new HashMap<>();
     private final Map<UUID, ItemStack[]> savedArmor = new HashMap<>();
     private final Map<UUID, Location> savedLoc = new HashMap<>();
@@ -245,7 +246,6 @@ public class EventManager {
 
         alive.clear();
         alive.addAll(participants);
-        frozen.addAll(alive);
 
         // Spread players in a circle around the center, facing inward
         int i = 0;
@@ -261,6 +261,7 @@ public class EventManager {
                 Location arenaSpot = plugin.getArenaManager()
                         .spreadSpawns(arena, alive.size()).get(i++);
                 plugin.getWagerManager().safeTeleport(p, arenaSpot);
+                frozen.put(id, p.getLocation().clone());
                 if (e.mode().usesKit()) e.mode().applyKit(p);
                 continue;
             }
@@ -276,6 +277,7 @@ public class EventManager {
             }
             spot.setDirection(center.toVector().subtract(spot.toVector()));
             plugin.getWagerManager().safeTeleport(p, spot);
+            frozen.put(id, p.getLocation().clone());
             if (e.mode().usesKit()) e.mode().applyKit(p);
         }
 
@@ -393,7 +395,10 @@ public class EventManager {
 
     public State getState() { return state; }
     public boolean isParticipantAlive(UUID id) { return alive.contains(id); }
-    public boolean isFrozen(UUID id) { return frozen.contains(id); }
+    public boolean isFrozen(UUID id) { return frozen.containsKey(id); }
+
+    /** The anchor a frozen event fighter is pinned to, or null. */
+    public Location getFrozenLocation(UUID id) { return frozen.get(id); }
     public int getAliveCount() { return alive.size(); }
     public int getJoinedCount() { return participants.size(); }
     public double pot() { return (current() == null ? 0 : current().prize()) + feePot; }

@@ -19,7 +19,8 @@ public class WagerManager {
 
     private final Map<UUID, Request> pendingRequests = new HashMap<>();
     private final Map<UUID, Wager> activeWagers = new HashMap<>();
-    private final Set<UUID> frozen = new HashSet<>();
+    /** Frozen players -> the exact spot they must stay on during countdown. */
+    private final Map<UUID, Location> frozen = new HashMap<>();
     private final Map<Wager, BukkitTask> countdownTasks = new HashMap<>();
     /** Players the plugin is currently teleporting itself (exempt from escape blocking). */
     private final Set<UUID> pluginTeleporting = new HashSet<>();
@@ -180,8 +181,8 @@ public class WagerManager {
             mode.applyKit(target);
         }
 
-        frozen.add(sender.getUniqueId());
-        frozen.add(target.getUniqueId());
+        frozen.put(sender.getUniqueId(), sender.getLocation().clone());
+        frozen.put(target.getUniqueId(), target.getLocation().clone());
         startCountdown(wager, sender, target);
     }
 
@@ -423,7 +424,10 @@ public class WagerManager {
 
     public boolean isInWager(UUID id) { return activeWagers.containsKey(id); }
     public Wager getWager(UUID id) { return activeWagers.get(id); }
-    public boolean isFrozen(UUID id) { return frozen.contains(id); }
+    public boolean isFrozen(UUID id) { return frozen.containsKey(id); }
+
+    /** The anchor a frozen player is pinned to, or null if not frozen. */
+    public Location getFrozenLocation(UUID id) { return frozen.get(id); }
 
     public boolean isPluginTeleporting(UUID id) { return pluginTeleporting.contains(id); }
 
