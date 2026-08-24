@@ -20,8 +20,8 @@
 
     <repositories>
         <repository>
-            <id>spigotmc-repo</id>
-            <url>https://hub.spigotmc.org/nexus/content/repositories/snapshots/</url>
+            <id>papermc</id>
+            <url>https://repo.papermc.io/repository/maven-public/</url>
         </repository>
         <repository>
             <id>placeholderapi</id>
@@ -34,9 +34,10 @@
     </repositories>
 
     <dependencies>
+        <!-- Paper API: includes Adventure + MiniMessage (Spigot API does not) -->
         <dependency>
-            <groupId>org.spigotmc</groupId>
-            <artifactId>spigot-api</artifactId>
+            <groupId>io.papermc.paper</groupId>
+            <artifactId>paper-api</artifactId>
             <version>1.20.4-R0.1-SNAPSHOT</version>
             <scope>provided</scope>
         </dependency>

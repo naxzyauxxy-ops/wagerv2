@@ -75,6 +75,61 @@ public class WagerCommand implements CommandExecutor, TabCompleter {
                 plugin.getMessages().reload();
                 player.sendMessage(plugin.getMessages().getPrefix() + "§aConfig and messages reloaded.");
             }
+            case "spectate", "spec", "watch" -> {
+                if (args.length < 2) {
+                    plugin.getSpectatorManager().stop(player, true);
+                    return true;
+                }
+                Player watch = Bukkit.getPlayerExact(args[1]);
+                if (watch == null) {
+                    msgs().send(player, "player-not-found");
+                    return true;
+                }
+                plugin.getSpectatorManager().spectate(player, watch);
+            }
+            case "unspectate", "unspec" -> plugin.getSpectatorManager().stop(player, true);
+            case "queue", "q" -> {
+                if (args.length == 1) {
+                    plugin.getQueueManager().status(player);
+                    return true;
+                }
+                if (args[1].equalsIgnoreCase("leave") || args[1].equalsIgnoreCase("exit")) {
+                    plugin.getQueueManager().leave(player);
+                    return true;
+                }
+                if (args.length < 3) {
+                    msgs().send(player, "queue-usage");
+                    return true;
+                }
+                WagerMode qMode = WagerMode.match(args[1]);
+                if (qMode == null) {
+                    msgs().send(player, "unknown-mode", "%modes%", WagerMode.list());
+                    return true;
+                }
+                double qAmount = AmountUtil.parse(args[2]);
+                if (qAmount <= 0) {
+                    msgs().send(player, "invalid-amount", "%input%", args[2]);
+                    return true;
+                }
+                plugin.getQueueManager().join(player, qMode, qAmount);
+            }
+            case "bet" -> {
+                if (args.length < 3) {
+                    msgs().send(player, "bet-usage");
+                    return true;
+                }
+                Player fighter = Bukkit.getPlayerExact(args[1]);
+                if (fighter == null) {
+                    msgs().send(player, "player-not-found");
+                    return true;
+                }
+                double betAmount = AmountUtil.parse(args[2]);
+                if (betAmount <= 0) {
+                    msgs().send(player, "invalid-amount", "%input%", args[2]);
+                    return true;
+                }
+                plugin.getBettingManager().placeBet(player, fighter, betAmount);
+            }
             case "join" -> plugin.getEventManager().join(player);
             case "leave" -> plugin.getEventManager().leave(player);
             case "event" -> {
@@ -113,10 +168,8 @@ public class WagerCommand implements CommandExecutor, TabCompleter {
                     msgs().send(player, "cant-wager-self");
                     return true;
                 }
-                double amount;
-                try {
-                    amount = Double.parseDouble(args[1]);
-                } catch (NumberFormatException e) {
+                double amount = AmountUtil.parse(args[1]);
+                if (amount <= 0) {
                     msgs().send(player, "invalid-amount", "%input%", args[1]);
                     return true;
                 }
@@ -145,24 +198,44 @@ public class WagerCommand implements CommandExecutor, TabCompleter {
         msgs().send(p, "help-stats");
         msgs().send(p, "help-join");
         msgs().send(p, "help-event");
+        msgs().send(p, "help-queue");
+        msgs().send(p, "help-spectate");
+        msgs().send(p, "help-bet");
     }
 
     @Override
     public List<String> onTabComplete(CommandSender sender, Command command, String alias, String[] args) {
         if (args.length == 1) {
-            List<String> out = new ArrayList<>(Arrays.asList("accept", "deny", "modes", "forfeit", "messages", "stats", "join", "leave", "event", "reload"));
+            List<String> out = new ArrayList<>(Arrays.asList("accept", "deny", "modes", "forfeit", "messages", "stats", "join", "leave", "event", "reload",
+                    "queue", "spectate", "bet", "unspectate"));
             Bukkit.getOnlinePlayers().forEach(p -> out.add(p.getName()));
             return filter(out, args[0]);
         }
         if (args.length == 2) {
+            if (args[0].equalsIgnoreCase("queue") || args[0].equalsIgnoreCase("q")) {
+                List<String> opts = new ArrayList<>();
+                for (WagerMode m : WagerMode.values()) opts.add(m.getDisplay());
+                opts.add("leave");
+                return filter(opts, args[1]);
+            }
+            if (args[0].equalsIgnoreCase("spectate") || args[0].equalsIgnoreCase("spec")
+                    || args[0].equalsIgnoreCase("bet")) {
+                List<String> names = new ArrayList<>();
+                Bukkit.getOnlinePlayers().forEach(pl -> names.add(pl.getName()));
+                return filter(names, args[1]);
+            }
             if (args[0].equalsIgnoreCase("stats")) {
                 List<String> names = new ArrayList<>();
                 Bukkit.getOnlinePlayers().forEach(p -> names.add(p.getName()));
                 return filter(names, args[1]);
             }
-            return filter(Arrays.asList("100", "500", "1000", "5000"), args[1]);
+            return filter(Arrays.asList("1k", "10k", "100k", "1m"), args[1]);
         }
         if (args.length == 3) {
+            if (args[0].equalsIgnoreCase("queue") || args[0].equalsIgnoreCase("q")
+                    || args[0].equalsIgnoreCase("bet")) {
+                return filter(Arrays.asList("1k", "10k", "100k", "1m"), args[2]);
+            }
             List<String> modes = new ArrayList<>();
             for (WagerMode m : WagerMode.values()) modes.add(m.getDisplay());
             return filter(modes, args[2]);

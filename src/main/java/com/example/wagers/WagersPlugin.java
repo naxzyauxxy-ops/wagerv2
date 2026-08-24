@@ -12,6 +12,10 @@ public class WagersPlugin extends JavaPlugin {
     private MessagesManager messagesManager;
     private PlayerDataManager playerData;
     private EventManager eventManager;
+    private ArenaManager arenaManager;
+    private QueueManager queueManager;
+    private BettingManager bettingManager;
+    private SpectatorManager spectatorManager;
 
     @Override
     public void onEnable() {
@@ -26,6 +30,10 @@ public class WagersPlugin extends JavaPlugin {
 
         playerData = new PlayerDataManager(this);
         messagesManager = new MessagesManager(this);
+        arenaManager = new ArenaManager(this);
+        queueManager = new QueueManager(this);
+        bettingManager = new BettingManager(this);
+        spectatorManager = new SpectatorManager(this);
         wagerManager = new WagerManager(this);
         eventManager = new EventManager(this);
 
@@ -43,6 +51,9 @@ public class WagersPlugin extends JavaPlugin {
 
     @Override
     public void onDisable() {
+        if (spectatorManager != null) spectatorManager.restoreAll();
+        if (bettingManager != null) bettingManager.refundAllOpen();
+        if (queueManager != null) queueManager.clear();
         if (eventManager != null) eventManager.shutdown();
         if (wagerManager != null) wagerManager.shutdown();
         if (playerData != null) playerData.save();
@@ -62,4 +73,8 @@ public class WagersPlugin extends JavaPlugin {
     public MessagesManager getMessages() { return messagesManager; }
     public PlayerDataManager getPlayerData() { return playerData; }
     public EventManager getEventManager() { return eventManager; }
+    public ArenaManager getArenaManager() { return arenaManager; }
+    public QueueManager getQueueManager() { return queueManager; }
+    public BettingManager getBettingManager() { return bettingManager; }
+    public SpectatorManager getSpectatorManager() { return spectatorManager; }
 }

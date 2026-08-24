@@ -61,3 +61,56 @@ events:
       mode: HARDCORE
       prize: 10000
       entry-fee: 100
+
+# ---------------- Escape prevention ----------------
+# Blocks ender pearls, chorus fruit, elytra, and /tp-style teleports
+# for anyone in a wager fight or event. The plugin's own teleports still work.
+block-escape-items: true
+
+# Let players watch live fights with /wager spectate <player>
+allow-spectating: true
+
+# ---------------- Side betting ----------------
+betting:
+  enabled: true
+  min-bet: 1
+  max-bet: 1000000
+  # Fraction of the losing pool the server keeps (0 = players get everything)
+  house-cut: 0.0
+
+# ---------------- Arenas ----------------
+# type: RTP      -> random spot in the wild (default)
+# type: PLATFORM -> a disc the plugin builds; falling off = instant loss
+arenas:
+  # Build missing platforms automatically on first use
+  auto-build: true
+  # Blocks placed per tick while building (lower = slower but gentler on TPS)
+  blocks-per-tick: 150
+
+  SUMO:
+    type: PLATFORM
+    world: world_the_end
+    x: 200
+    y: 60
+    z: 200
+    radius: 7
+    material: OBSIDIAN
+    void-death: true
+
+  HARDCORE:
+    type: PLATFORM
+    world: world_the_end
+    x: 400
+    y: 60
+    z: 400
+    radius: 14
+    material: OBSIDIAN
+    void-death: true
+
+  # These use RTP unless you change them to PLATFORM:
+  # CLASSIC:
+  #   type: RTP
+  # DIAMOND:
+  #   type: RTP
+  # NODEBUFF:
+  #   type: RTP

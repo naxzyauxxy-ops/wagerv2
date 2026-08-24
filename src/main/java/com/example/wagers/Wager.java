@@ -17,6 +17,8 @@ public class Wager {
     private final WagerMode mode;
 
     private State state = State.COUNTDOWN;
+    /** Fall below this Y on a platform arena and you're knocked out. */
+    private double lossY = Double.NEGATIVE_INFINITY;
 
     private final Map<UUID, ItemStack[]> savedInventories = new HashMap<>();
     private final Map<UUID, ItemStack[]> savedArmor = new HashMap<>();
@@ -34,6 +36,9 @@ public class Wager {
     public double getAmount() { return amount; }
     public double getPot() { return amount * 2; }
     public WagerMode getMode() { return mode; }
+
+    public double getLossY() { return lossY; }
+    public void setLossY(double lossY) { this.lossY = lossY; }
 
     public State getState() { return state; }
     public void setState(State state) { this.state = state; }

@@ -21,6 +21,8 @@ public class WagerManager {
     private final Map<UUID, Wager> activeWagers = new HashMap<>();
     private final Set<UUID> frozen = new HashSet<>();
     private final Map<Wager, BukkitTask> countdownTasks = new HashMap<>();
+    /** Players the plugin is currently teleporting itself (exempt from escape blocking). */
+    private final Set<UUID> pluginTeleporting = new HashSet<>();
 
     public WagerManager(WagersPlugin plugin) {
         this.plugin = plugin;
@@ -121,31 +123,56 @@ public class WagerManager {
             return;
         }
 
-        plugin.getEconomy().withdrawPlayer(sender, req.amount());
-        plugin.getEconomy().withdrawPlayer(target, req.amount());
+        beginFight(sender, target, req.amount(), req.mode());
+    }
 
-        Wager wager = new Wager(sender.getUniqueId(), target.getUniqueId(), req.amount(), req.mode());
+    /**
+     * Set up and start a fight between two players. Used by accepted requests
+     * and by the matchmaking queue. Takes the stakes, snapshots inventories,
+     * moves both players to the mode's arena (or RTP), then counts down.
+     */
+    public void beginFight(Player sender, Player target, double amount, WagerMode mode) {
+        plugin.getEconomy().withdrawPlayer(sender, amount);
+        plugin.getEconomy().withdrawPlayer(target, amount);
+
+        Wager wager = new Wager(sender.getUniqueId(), target.getUniqueId(), amount, mode);
         activeWagers.put(sender.getUniqueId(), wager);
         activeWagers.put(target.getUniqueId(), wager);
 
         snapshot(wager, sender);
         snapshot(wager, target);
 
-        Location center = findRandomSafeLocation(sender.getWorld());
-        if (center == null) {
-            refundAndClear(wager, "no-safe-location");
-            return;
+        plugin.getQueueManager().remove(sender.getUniqueId());
+        plugin.getQueueManager().remove(target.getUniqueId());
+
+        Location loc1, loc2;
+        ArenaManager.Arena arena = plugin.getArenaManager().getArena(mode);
+        if (arena != null) {
+            // Fixed arena for this mode (e.g. Sumo platform in the End)
+            plugin.getArenaManager().ensureBuilt(mode);
+            Location[] spawns = plugin.getArenaManager().duelSpawns(arena);
+            loc1 = spawns[0];
+            loc2 = spawns[1];
+            wager.setLossY(arena.lossY());
+        } else {
+            Location center = findRandomSafeLocation(sender.getWorld());
+            if (center == null) {
+                refundAndClear(wager, "no-safe-location");
+                return;
+            }
+            int gap = plugin.getConfig().getInt("rtp.player-gap", 8);
+            loc1 = center.clone();
+            loc2 = shiftSafe(center, gap);
+            loc1 = face(loc1, loc2);
+            loc2 = face(loc2, loc1);
         }
-        int gap = plugin.getConfig().getInt("rtp.player-gap", 8);
-        Location loc1 = center.clone();
-        Location loc2 = shiftSafe(center, gap);
 
-        sender.teleport(face(loc1, loc2));
-        target.teleport(face(loc2, loc1));
+        safeTeleport(sender, loc1);
+        safeTeleport(target, loc2);
 
-        if (req.mode().usesKit()) {
-            req.mode().applyKit(sender);
-            req.mode().applyKit(target);
+        if (mode.usesKit()) {
+            mode.applyKit(sender);
+            mode.applyKit(target);
         }
 
         frozen.add(sender.getUniqueId());
@@ -215,6 +242,9 @@ public class WagerManager {
         OfflinePlayer winner = Bukkit.getOfflinePlayer(winnerId);
         plugin.getEconomy().depositPlayer(winner, wager.getPot());
 
+        plugin.getBettingManager().settle(wager, winnerId, loserId);
+        plugin.getSpectatorManager().releaseWatchersOf(wager.getPlayer1(), wager.getPlayer2());
+
         // Stats: winner nets +stake, loser nets -stake
         plugin.getPlayerData().recordWin(winnerId, wager.getAmount());
         plugin.getPlayerData().recordLoss(loserId, wager.getAmount());
@@ -251,11 +281,13 @@ public class WagerManager {
         }
         p.removePotionEffect(PotionEffectType.HUNGER);
         Location back = wager.getSavedLocation(id);
-        if (back != null) p.teleport(back);
+        if (back != null) safeTeleport(p, back);
         p.setFireTicks(0);
     }
 
     private void refundAndClear(Wager wager, String messageKey) {
+        plugin.getBettingManager().refund(wager);
+        plugin.getSpectatorManager().releaseWatchersOf(wager.getPlayer1(), wager.getPlayer2());
         plugin.getEconomy().depositPlayer(Bukkit.getOfflinePlayer(wager.getPlayer1()), wager.getAmount());
         plugin.getEconomy().depositPlayer(Bukkit.getOfflinePlayer(wager.getPlayer2()), wager.getAmount());
         activeWagers.remove(wager.getPlayer1());
@@ -280,6 +312,8 @@ public class WagerManager {
                 }
             }
         });
+        plugin.getBettingManager().refundAllOpen();
+        plugin.getSpectatorManager().restoreAll();
         activeWagers.clear();
         frozen.clear();
         countdownTasks.values().forEach(BukkitTask::cancel);
@@ -377,6 +411,18 @@ public class WagerManager {
     public boolean isInWager(UUID id) { return activeWagers.containsKey(id); }
     public Wager getWager(UUID id) { return activeWagers.get(id); }
     public boolean isFrozen(UUID id) { return frozen.contains(id); }
+
+    public boolean isPluginTeleporting(UUID id) { return pluginTeleporting.contains(id); }
+
+    /** Teleport a player without the escape-blocking listener cancelling it. */
+    public void safeTeleport(Player p, Location to) {
+        pluginTeleporting.add(p.getUniqueId());
+        try {
+            p.teleport(to);
+        } finally {
+            pluginTeleporting.remove(p.getUniqueId());
+        }
+    }
 
     private static final String[] SUFFIXES = {"", "K", "M", "B", "T", "Q"};
 

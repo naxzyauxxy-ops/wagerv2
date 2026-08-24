@@ -105,3 +105,50 @@ event-status-joining: "&a&lJOINABLE"
 event-status-running: "&c&lLIVE"
 help-join: "%prefix%&e/wager join &7- join the current event"
 help-event: "%prefix%&e/wager event &7- next event info"
+
+# Escape prevention
+no-teleporting: "%prefix%&cYou can't teleport during a fight!"
+no-pearls: "%prefix%&cNo pearls or chorus fruit during a fight!"
+no-elytra: "%prefix%&cNo flying during a fight!"
+
+# Spectating  |  %player%
+spectate-disabled: "%prefix%&cSpectating is disabled on this server."
+spectate-started: "%prefix%&aNow spectating &e%player%&a. &7Use &e/wager spectate &7to stop."
+spectate-stopped: "%prefix%&7You stopped spectating."
+spectate-fight-over: "%prefix%&7The fight ended — returning you back."
+spectate-not-fighting: "%prefix%&c%player% isn't in a fight right now."
+spectate-not-spectating: "%prefix%&cYou aren't spectating anyone."
+spectate-while-fighting: "%prefix%&cYou can't spectate while you're fighting!"
+spectate-self: "%prefix%&cYou can't spectate yourself."
+
+# Queue  |  %mode% %amount% %queued% %player% %time%
+queue-usage: "%prefix%&cUsage: &e/wager queue <mode> <amount> &7(or &e/wager queue leave&7)"
+queue-joined: "%prefix%&aQueued for &b%mode% &7at &6%amount%&7. &8(%queued% waiting)"
+queue-left: "%prefix%&cYou left the queue."
+queue-already: "%prefix%&cYou're already in the queue. &7Use &e/wager queue leave&7."
+queue-not-in: "%prefix%&cYou're not in the queue."
+queue-matched: "%prefix%&6&l⚔ Match found! &7Opponent: &e%player%"
+queue-removed-funds: "%prefix%&cRemoved from the queue — you no longer have enough money."
+queue-header: "%prefix%&6&lQueue"
+queue-status-none: "%prefix%&7You aren't queued. &e/wager queue <mode> <amount>"
+queue-status-in: "%prefix%&7Queued: &b%mode% &7at &6%amount% &8(waiting %time%)"
+queue-status-total: "%prefix%&7Players in queue: &e%queued%"
+
+# Betting  |  %player% %amount% %total% %payout% %profit%
+bet-usage: "%prefix%&cUsage: &e/wager bet <fighter> <amount>"
+bet-disabled: "%prefix%&cBetting is disabled on this server."
+bet-not-fighting: "%prefix%&c%player% isn't in a fight right now."
+bet-own-fight: "%prefix%&cYou can't bet on your own fight!"
+bet-closed: "%prefix%&cBetting closed — the fight already started."
+bet-other-side: "%prefix%&cYou already backed the other fighter."
+bet-range: "%prefix%&cBets must be between &e%min% &cand &e%max%&c."
+bet-placed: "%prefix%&aBet &6%amount% &aon &e%player%&a! &7(your total: %total%)"
+bet-backed: "%prefix%&e%player% &7bet &6%amount% &7on you!"
+bet-won: "%prefix%&6&l✔ &aYour bet paid out &6%payout% &7(profit: &a%profit%&7)"
+bet-lost: "%prefix%&c✖ You lost your &e%amount% &cbet."
+bet-refunded: "%prefix%&7Bet refunded: &6%amount%"
+
+# Help
+help-queue: "%prefix%&e/wager queue <mode> <amount> &7- auto-match an opponent"
+help-spectate: "%prefix%&e/wager spectate <player> &7- watch a live fight"
+help-bet: "%prefix%&e/wager bet <fighter> <amount> &7- back a fighter to win"

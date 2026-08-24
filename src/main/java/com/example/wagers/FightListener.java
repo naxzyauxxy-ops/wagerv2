@@ -1,6 +1,8 @@
 package com.example.wagers;
 
 import org.bukkit.Bukkit;
+import org.bukkit.Material;
+import org.bukkit.entity.EnderPearl;
 import org.bukkit.entity.Player;
 import org.bukkit.entity.Projectile;
 import org.bukkit.event.EventHandler;
@@ -9,7 +11,11 @@ import org.bukkit.event.Listener;
 import org.bukkit.event.entity.EntityDamageByEntityEvent;
 import org.bukkit.event.entity.EntityDamageEvent;
 import org.bukkit.event.entity.EntityRegainHealthEvent;
+import org.bukkit.event.entity.EntityToggleGlideEvent;
 import org.bukkit.event.entity.PlayerDeathEvent;
+import org.bukkit.event.entity.ProjectileLaunchEvent;
+import org.bukkit.event.player.PlayerItemConsumeEvent;
+import org.bukkit.event.player.PlayerTeleportEvent;
 import org.bukkit.event.player.PlayerCommandPreprocessEvent;
 import org.bukkit.event.player.PlayerMoveEvent;
 import org.bukkit.event.player.PlayerQuitEvent;
@@ -183,5 +189,83 @@ public class FightListener implements Listener {
         if (cmd.startsWith("/wager")) return;
         event.setCancelled(true);
         plugin.getMessages().send(p, "no-commands");
+    }
+
+    /* ------------------------------------------------------------------ */
+    /* Arena ring-outs + escape prevention                                 */
+    /* ------------------------------------------------------------------ */
+
+    /** True if this player is in any active fight (wager or event). */
+    private boolean isFighting(Player p) {
+        return wm().isInWager(p.getUniqueId()) || em().isParticipantAlive(p.getUniqueId());
+    }
+
+    private boolean blockEscapes() {
+        return plugin.getConfig().getBoolean("block-escape-items", true);
+    }
+
+    /** Fall off a platform arena and you lose the fight. */
+    @EventHandler(ignoreCancelled = true)
+    public void onRingOut(PlayerMoveEvent event) {
+        Player p = event.getPlayer();
+        Wager w = wm().getWager(p.getUniqueId());
+        if (w == null || w.getState() != Wager.State.FIGHTING) return;
+        if (event.getTo() == null) return;
+        if (event.getTo().getY() >= w.getLossY()) return;
+
+        wm().endFight(w, w.getOpponent(p.getUniqueId()), p.getUniqueId(), "knocked off");
+    }
+
+    /** No pearling, chorus-fruiting, or /tp-ing out of a fight. */
+    @EventHandler(ignoreCancelled = true)
+    public void onTeleport(PlayerTeleportEvent event) {
+        Player p = event.getPlayer();
+        if (!blockEscapes() || !isFighting(p)) return;
+
+        switch (event.getCause()) {
+            case ENDER_PEARL, CHORUS_FRUIT, COMMAND, PLUGIN, SPECTATE -> {
+                // The plugin's own teleports are exempt
+                if (wm().isPluginTeleporting(p.getUniqueId())) return;
+                event.setCancelled(true);
+                plugin.getMessages().send(p, "no-teleporting");
+            }
+            default -> { }
+        }
+    }
+
+    /** Cancel the pearl at throw time so it isn't even wasted. */
+    @EventHandler(ignoreCancelled = true)
+    public void onPearlThrow(ProjectileLaunchEvent event) {
+        if (!(event.getEntity() instanceof EnderPearl pearl)) return;
+        if (!(pearl.getShooter() instanceof Player p)) return;
+        if (!blockEscapes() || !isFighting(p)) return;
+        event.setCancelled(true);
+        plugin.getMessages().send(p, "no-pearls");
+    }
+
+    @EventHandler(ignoreCancelled = true)
+    public void onConsume(PlayerItemConsumeEvent event) {
+        Player p = event.getPlayer();
+        if (!blockEscapes() || !isFighting(p)) return;
+        if (event.getItem().getType() != Material.CHORUS_FRUIT) return;
+        event.setCancelled(true);
+        plugin.getMessages().send(p, "no-pearls");
+    }
+
+    /** No flying away mid-fight. */
+    @EventHandler(ignoreCancelled = true)
+    public void onGlide(EntityToggleGlideEvent event) {
+        if (!(event.getEntity() instanceof Player p)) return;
+        if (!blockEscapes() || !isFighting(p)) return;
+        if (!event.isGliding()) return;
+        event.setCancelled(true);
+        plugin.getMessages().send(p, "no-elytra");
+    }
+
+    /** Spectators leaving mid-fight shouldn't stay stuck in spectator mode. */
+    @EventHandler
+    public void onSpectatorQuit(PlayerQuitEvent event) {
+        plugin.getSpectatorManager().handleQuit(event.getPlayer());
+        plugin.getQueueManager().remove(event.getPlayer().getUniqueId());
     }
 }

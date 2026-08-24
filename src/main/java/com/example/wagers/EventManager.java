@@ -228,7 +228,14 @@ public class EventManager {
         }
 
         Player any = Bukkit.getPlayer(participants.iterator().next());
-        Location center = plugin.getWagerManager().findRandomSafeLocation(any.getWorld());
+        ArenaManager.Arena arena = plugin.getArenaManager().getArena(e.mode());
+        Location center;
+        if (arena != null) {
+            plugin.getArenaManager().ensureBuilt(e.mode());
+            center = arena.center();
+        } else {
+            center = plugin.getWagerManager().findRandomSafeLocation(any.getWorld());
+        }
         if (center == null) {
             refundFees();
             broadcastToggleable("event-cancelled", "%min%", String.valueOf(min));
@@ -250,6 +257,13 @@ public class EventManager {
             savedArmor.put(id, p.getInventory().getArmorContents().clone());
             savedLoc.put(id, p.getLocation().clone());
 
+            if (arena != null) {
+                Location arenaSpot = plugin.getArenaManager()
+                        .spreadSpawns(arena, alive.size()).get(i++);
+                plugin.getWagerManager().safeTeleport(p, arenaSpot);
+                if (e.mode().usesKit()) e.mode().applyKit(p);
+                continue;
+            }
             double angle = (2 * Math.PI / alive.size()) * i++;
             int x = center.getBlockX() + (int) Math.round(Math.cos(angle) * radius);
             int z = center.getBlockZ() + (int) Math.round(Math.sin(angle) * radius);
@@ -261,7 +275,7 @@ public class EventManager {
                 spot = center.clone().add((i % 3) - 1, 0, (i % 5) - 2);
             }
             spot.setDirection(center.toVector().subtract(spot.toVector()));
-            p.teleport(spot);
+            plugin.getWagerManager().safeTeleport(p, spot);
             if (e.mode().usesKit()) e.mode().applyKit(p);
         }
 
@@ -335,7 +349,7 @@ public class EventManager {
         }
         p.removePotionEffect(org.bukkit.potion.PotionEffectType.HUNGER);
         Location back = savedLoc.get(id);
-        if (back != null) p.teleport(back);
+        if (back != null) plugin.getWagerManager().safeTeleport(p, back);
         p.setFireTicks(0);
     }
 
@@ -350,6 +364,7 @@ public class EventManager {
 
     /** Move to the next event in the rotation and restart the waiting timer. */
     private void advance() {
+        plugin.getSpectatorManager().releaseWatchersOf(participants.toArray(new UUID[0]));
         state = State.WAITING;
         secondsLeft = plugin.getConfig().getInt("events.interval-seconds", 900);
         index = (index + 1) % Math.max(1, rotation.size());

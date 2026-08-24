@@ -10,7 +10,7 @@ author: You
 commands:
   wager:
     description: Wager system - fight players for money
-    usage: /wager <player> <amount> [mode] | accept | deny | modes | forfeit | messages | stats [player] | join | leave | event
+    usage: /wager <player> <amount> [mode] | accept | deny | modes | forfeit | messages | stats [player] | join | leave | event | queue | spectate | bet
     aliases: [duel, bet]
 
 permissions:
