@@ -19,8 +19,10 @@ abbreviate-money: true
 broadcast-fights: true
 
 rtp:
-  # World to teleport fights into. Leave empty ("") to use the challenger's current world.
-  world: ""
+  # World ALL random-teleport fights happen in. This is strict - fights never
+  # use the challenger's current world. If this world doesn't exist, the wager
+  # is cancelled and both players are refunded.
+  world: "world"
   # Random teleport radius (blocks) around the world spawn.
   # Keep this within terrain that's already generated! The plugin will never
   # generate new chunks (that lags the server), so if the area isn't
@@ -63,9 +65,13 @@ events:
       entry-fee: 100
 
 # ---------------- Escape prevention ----------------
-# Blocks ender pearls, chorus fruit, elytra, and /tp-style teleports
-# for anyone in a wager fight or event. The plugin's own teleports still work.
-block-escape-items: true
+# Controls ender pearls, chorus fruit, elytra, and /tp-style teleports.
+#   countdown - blocked only during the frozen pre-fight countdown, then allowed
+#               once "FIGHT!" appears (default - lets players pearl in combat)
+#   always    - blocked for the entire fight
+#   never     - never blocked
+# The plugin's own teleports (arena spawns, post-fight returns) always work.
+block-escape-items: countdown
 
 # Let players watch live fights with /wager spectate <player>
 allow-spectating: true
@@ -114,3 +120,13 @@ arenas:
   #   type: RTP
   # NODEBUFF:
   #   type: RTP
+
+# ---------------- Perimeter ----------------
+# How far (blocks, horizontal) a fighter may stray from the centre of an RTP
+# fight before being stopped. Platform arenas use their own radius + 8.
+fight-boundary-radius: 60
+
+# How far a spectator may drift from the fighter they're watching before being
+# pulled back. Keep this small - spectator mode sees through blocks, so a large
+# value lets people scout bases while "watching" a fight.
+spectator-leash-radius: 25

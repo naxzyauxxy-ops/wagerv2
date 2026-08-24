@@ -1,7 +1,9 @@
 package com.example.wagers;
 
 import org.bukkit.Bukkit;
+import org.bukkit.Location;
 import org.bukkit.Material;
+import org.bukkit.Sound;
 import org.bukkit.entity.EnderPearl;
 import org.bukkit.entity.Player;
 import org.bukkit.entity.Projectile;
@@ -21,11 +23,15 @@ import org.bukkit.event.player.PlayerMoveEvent;
 import org.bukkit.event.player.PlayerQuitEvent;
 import org.bukkit.event.player.PlayerRespawnEvent;
 
+import java.util.HashMap;
+import java.util.Map;
 import java.util.UUID;
 
 public class FightListener implements Listener {
 
     private final WagersPlugin plugin;
+    /** Rate-limits boundary warnings so players aren't spammed every tick. */
+    private final Map<UUID, Long> lastBoundaryWarn = new HashMap<>();
 
     public FightListener(WagersPlugin plugin) {
         this.plugin = plugin;
@@ -183,7 +189,8 @@ public class FightListener implements Listener {
         Player p = event.getPlayer();
         boolean inWager = wm().isInWager(p.getUniqueId());
         boolean inEvent = em().isParticipantAlive(p.getUniqueId());
-        if (!inWager && !inEvent) return;
+        boolean spectating = plugin.getSpectatorManager().isSpectating(p.getUniqueId());
+        if (!inWager && !inEvent && !spectating) return;
         if (p.hasPermission("wagers.bypass-commands")) return;
         String cmd = event.getMessage().toLowerCase();
         if (cmd.startsWith("/wager")) return;
@@ -195,13 +202,27 @@ public class FightListener implements Listener {
     /* Arena ring-outs + escape prevention                                 */
     /* ------------------------------------------------------------------ */
 
-    /** True if this player is in any active fight (wager or event). */
-    private boolean isFighting(Player p) {
-        return wm().isInWager(p.getUniqueId()) || em().isParticipantAlive(p.getUniqueId());
-    }
+    /**
+     * Should pearls / chorus / elytra / teleports be blocked for this player
+     * right now? Mode is set by block-escape-items in config.yml:
+     *   countdown - blocked only while frozen pre-fight, free once FIGHT! shows (default)
+     *   always    - blocked for the whole fight
+     *   never     - never blocked
+     */
+    private boolean blockEscapes(Player p) {
+        String mode = plugin.getConfig().getString("block-escape-items", "countdown").toLowerCase();
+        if (mode.equals("never") || mode.equals("false")) return false;
 
-    private boolean blockEscapes() {
-        return plugin.getConfig().getBoolean("block-escape-items", true);
+        Wager w = wm().getWager(p.getUniqueId());
+        boolean inEvent = em().isParticipantAlive(p.getUniqueId());
+        if (w == null && !inEvent) return false;
+
+        if (mode.equals("always") || mode.equals("true")) return true;
+
+        // "countdown": only while the pre-fight countdown is still running
+        boolean wagerCountdown = w != null && w.getState() == Wager.State.COUNTDOWN;
+        boolean eventCountdown = inEvent && em().getState() == EventManager.State.COUNTDOWN;
+        return wagerCountdown || eventCountdown;
     }
 
     /** Fall off a platform arena and you lose the fight. */
@@ -220,7 +241,21 @@ public class FightListener implements Listener {
     @EventHandler(ignoreCancelled = true)
     public void onTeleport(PlayerTeleportEvent event) {
         Player p = event.getPlayer();
-        if (!blockEscapes() || !isFighting(p)) return;
+
+        // Spectators may never teleport themselves out of the fight
+        if (plugin.getSpectatorManager().isSpectating(p.getUniqueId())
+                && !wm().isPluginTeleporting(p.getUniqueId())) {
+            switch (event.getCause()) {
+                case COMMAND, PLUGIN, ENDER_PEARL, CHORUS_FRUIT -> {
+                    event.setCancelled(true);
+                    plugin.getMessages().send(p, "spectate-no-teleport");
+                    return;
+                }
+                default -> { return; }
+            }
+        }
+
+        if (!blockEscapes(p)) return;
 
         switch (event.getCause()) {
             case ENDER_PEARL, CHORUS_FRUIT, COMMAND, PLUGIN, SPECTATE -> {
@@ -238,7 +273,7 @@ public class FightListener implements Listener {
     public void onPearlThrow(ProjectileLaunchEvent event) {
         if (!(event.getEntity() instanceof EnderPearl pearl)) return;
         if (!(pearl.getShooter() instanceof Player p)) return;
-        if (!blockEscapes() || !isFighting(p)) return;
+        if (!blockEscapes(p)) return;
         event.setCancelled(true);
         plugin.getMessages().send(p, "no-pearls");
     }
@@ -246,7 +281,7 @@ public class FightListener implements Listener {
     @EventHandler(ignoreCancelled = true)
     public void onConsume(PlayerItemConsumeEvent event) {
         Player p = event.getPlayer();
-        if (!blockEscapes() || !isFighting(p)) return;
+        if (!blockEscapes(p)) return;
         if (event.getItem().getType() != Material.CHORUS_FRUIT) return;
         event.setCancelled(true);
         plugin.getMessages().send(p, "no-pearls");
@@ -256,7 +291,7 @@ public class FightListener implements Listener {
     @EventHandler(ignoreCancelled = true)
     public void onGlide(EntityToggleGlideEvent event) {
         if (!(event.getEntity() instanceof Player p)) return;
-        if (!blockEscapes() || !isFighting(p)) return;
+        if (!blockEscapes(p)) return;
         if (!event.isGliding()) return;
         event.setCancelled(true);
         plugin.getMessages().send(p, "no-elytra");
@@ -267,5 +302,68 @@ public class FightListener implements Listener {
     public void onSpectatorQuit(PlayerQuitEvent event) {
         plugin.getSpectatorManager().handleQuit(event.getPlayer());
         plugin.getQueueManager().remove(event.getPlayer().getUniqueId());
+    }
+
+    /* ------------------------------------------------------------------ */
+    /* Perimeter: fighters can't run off, spectators can't wander          */
+    /* ------------------------------------------------------------------ */
+
+    /** Warn a player at most once every 2 seconds. */
+    private void warnBoundary(Player p, String key) {
+        long now = System.currentTimeMillis();
+        Long last = lastBoundaryWarn.get(p.getUniqueId());
+        if (last != null && now - last < 2000L) return;
+        lastBoundaryWarn.put(p.getUniqueId(), now);
+        plugin.getMessages().send(p, key);
+        p.playSound(p.getLocation(), Sound.BLOCK_NOTE_BLOCK_BASS, 0.7f, 0.6f);
+    }
+
+    /**
+     * Fighters are confined to a radius around the fight centre, and spectators
+     * are leashed to the fighter they're watching. This stops spectator mode
+     * being used to fly around and scout bases.
+     */
+    @EventHandler(ignoreCancelled = true, priority = EventPriority.HIGH)
+    public void onPerimeter(PlayerMoveEvent event) {
+        if (event.getTo() == null) return;
+        Player p = event.getPlayer();
+        UUID id = p.getUniqueId();
+
+        // --- Spectators: leashed to their fighter ---
+        UUID watchedId = plugin.getSpectatorManager().getWatchedFighter(id);
+        if (watchedId != null) {
+            Player watched = Bukkit.getPlayer(watchedId);
+            if (watched == null) {
+                plugin.getSpectatorManager().stop(p, true);
+                return;
+            }
+            double leash = plugin.getConfig().getDouble("spectator-leash-radius", 25);
+            if (!event.getTo().getWorld().equals(watched.getWorld())
+                    || event.getTo().distanceSquared(watched.getLocation()) > leash * leash) {
+                event.setTo(event.getFrom());
+                plugin.getWagerManager().safeTeleport(p, watched.getLocation());
+                warnBoundary(p, "spectate-leashed");
+            }
+            return;
+        }
+
+        // --- Fighters: confined to the arena / fight area ---
+        Wager w = wm().getWager(id);
+        if (w == null || w.getCenter() == null || w.getBoundaryRadius() <= 0) return;
+        if (w.getState() == Wager.State.ENDED) return;
+
+        Location center = w.getCenter();
+        if (!event.getTo().getWorld().equals(center.getWorld())) {
+            event.setTo(event.getFrom());
+            return;
+        }
+        double r = w.getBoundaryRadius();
+        // Horizontal distance only, so falling off a platform still counts as a ring-out
+        double dx = event.getTo().getX() - center.getX();
+        double dz = event.getTo().getZ() - center.getZ();
+        if (dx * dx + dz * dz <= r * r) return;
+
+        event.setTo(event.getFrom());
+        warnBoundary(p, "boundary-reached");
     }
 }

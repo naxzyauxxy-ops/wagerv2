@@ -19,6 +19,9 @@ public class Wager {
     private State state = State.COUNTDOWN;
     /** Fall below this Y on a platform arena and you're knocked out. */
     private double lossY = Double.NEGATIVE_INFINITY;
+    /** Centre of the fight area and how far fighters may stray from it. */
+    private Location center;
+    private double boundaryRadius = -1;
 
     private final Map<UUID, ItemStack[]> savedInventories = new HashMap<>();
     private final Map<UUID, ItemStack[]> savedArmor = new HashMap<>();
@@ -36,6 +39,12 @@ public class Wager {
     public double getAmount() { return amount; }
     public double getPot() { return amount * 2; }
     public WagerMode getMode() { return mode; }
+
+    public Location getCenter() { return center; }
+    public void setCenter(Location center) { this.center = center; }
+
+    public double getBoundaryRadius() { return boundaryRadius; }
+    public void setBoundaryRadius(double boundaryRadius) { this.boundaryRadius = boundaryRadius; }
 
     public double getLossY() { return lossY; }
     public void setLossY(double lossY) { this.lossY = lossY; }

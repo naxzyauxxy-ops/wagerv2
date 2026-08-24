@@ -107,9 +107,9 @@ help-join: "%prefix%&e/wager join &7- join the current event"
 help-event: "%prefix%&e/wager event &7- next event info"
 
 # Escape prevention
-no-teleporting: "%prefix%&cYou can't teleport during a fight!"
-no-pearls: "%prefix%&cNo pearls or chorus fruit during a fight!"
-no-elytra: "%prefix%&cNo flying during a fight!"
+no-teleporting: "%prefix%&cYou can't teleport until the fight starts!"
+no-pearls: "%prefix%&cWait for the countdown to finish before pearling!"
+no-elytra: "%prefix%&cYou can't fly until the fight starts!"
 
 # Spectating  |  %player%
 spectate-disabled: "%prefix%&cSpectating is disabled on this server."
@@ -152,3 +152,8 @@ bet-refunded: "%prefix%&7Bet refunded: &6%amount%"
 help-queue: "%prefix%&e/wager queue <mode> <amount> &7- auto-match an opponent"
 help-spectate: "%prefix%&e/wager spectate <player> &7- watch a live fight"
 help-bet: "%prefix%&e/wager bet <fighter> <amount> &7- back a fighter to win"
+
+# Perimeter
+boundary-reached: "%prefix%&cYou can't leave the fight area!"
+spectate-leashed: "%prefix%&cStay near the fight — you can't wander off while spectating."
+spectate-no-teleport: "%prefix%&cYou can't teleport while spectating. Use &e/wager spectate &cto stop."

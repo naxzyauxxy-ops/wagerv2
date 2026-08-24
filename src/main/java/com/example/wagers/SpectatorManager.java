@@ -33,6 +33,11 @@ public class SpectatorManager {
         return watching.containsKey(id);
     }
 
+    /** The fighter this spectator is following, or null. */
+    public UUID getWatchedFighter(UUID spectatorId) {
+        return watching.get(spectatorId);
+    }
+
     public void spectate(Player viewer, Player target) {
         if (!plugin.getConfig().getBoolean("allow-spectating", true)) {
             msgs().send(viewer, "spectate-disabled");

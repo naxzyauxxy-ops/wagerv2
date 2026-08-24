@@ -154,6 +154,9 @@ public class WagerManager {
             loc1 = spawns[0];
             loc2 = spawns[1];
             wager.setLossY(arena.lossY());
+            wager.setCenter(arena.center());
+            // A little slack past the platform edge so knockback isn't cancelled
+            wager.setBoundaryRadius(arena.radius + 8);
         } else {
             Location center = findRandomSafeLocation(sender.getWorld());
             if (center == null) {
@@ -165,6 +168,8 @@ public class WagerManager {
             loc2 = shiftSafe(center, gap);
             loc1 = face(loc1, loc2);
             loc2 = face(loc2, loc1);
+            wager.setCenter(center.clone());
+            wager.setBoundaryRadius(plugin.getConfig().getDouble("fight-boundary-radius", 60));
         }
 
         safeTeleport(sender, loc1);
@@ -344,12 +349,20 @@ public class WagerManager {
     /* RTP helpers                                                         */
     /* ------------------------------------------------------------------ */
 
-    public Location findRandomSafeLocation(World fallbackWorld) {
-        String worldName = plugin.getConfig().getString("rtp.world", "");
-        World world = worldName.isEmpty() ? fallbackWorld : Bukkit.getWorld(worldName);
-        if (world == null) world = fallbackWorld;
+    /**
+     * Find a random safe spot in the configured RTP world ONLY.
+     * Never falls back to the player's current world - if the configured world
+     * is missing, the wager is cancelled and refunded instead.
+     */
+    public Location findRandomSafeLocation(World ignored) {
+        String worldName = plugin.getConfig().getString("rtp.world", "world");
+        World world = Bukkit.getWorld(worldName);
+        if (world == null) {
+            plugin.getLogger().warning("RTP world '" + worldName + "' not found! Check rtp.world in config.yml.");
+            return null;
+        }
 
-        int radius = plugin.getConfig().getInt("rtp.radius", 3000);
+        int radius = plugin.getConfig().getInt("rtp.radius", 500);
         Location spawn = world.getSpawnLocation();
 
         // Pass 1 (attempts 0-24): only chunks already loaded in memory - zero cost.
