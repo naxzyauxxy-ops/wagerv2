@@ -13,6 +13,7 @@ public class WagersPlugin extends JavaPlugin {
     private PlayerDataManager playerData;
     private EventManager eventManager;
     private ArenaManager arenaManager;
+    private MinigameManager minigameManager;
     private QueueManager queueManager;
     private BettingManager bettingManager;
     private SpectatorManager spectatorManager;
@@ -31,6 +32,7 @@ public class WagersPlugin extends JavaPlugin {
         playerData = new PlayerDataManager(this);
         messagesManager = new MessagesManager(this);
         arenaManager = new ArenaManager(this);
+        minigameManager = new MinigameManager(this);
         queueManager = new QueueManager(this);
         bettingManager = new BettingManager(this);
         spectatorManager = new SpectatorManager(this);
@@ -47,7 +49,7 @@ public class WagersPlugin extends JavaPlugin {
         }
 
         getLogger().info("=====================================");
-        getLogger().info(" WagersPlugin v" + getDescription().getVersion() + " BUILD 7 (hard-freeze)");
+        getLogger().info(" WagersPlugin v" + getDescription().getVersion() + " BUILD 9 (bossbar + timer)");
         getLogger().info(" Modes: " + WagerMode.list());
         getLogger().info(" If this line is missing from your log, the");
         getLogger().info(" server is running an OLD jar.");
@@ -79,6 +81,7 @@ public class WagersPlugin extends JavaPlugin {
     public PlayerDataManager getPlayerData() { return playerData; }
     public EventManager getEventManager() { return eventManager; }
     public ArenaManager getArenaManager() { return arenaManager; }
+    public MinigameManager getMinigameManager() { return minigameManager; }
     public QueueManager getQueueManager() { return queueManager; }
     public BettingManager getBettingManager() { return bettingManager; }
     public SpectatorManager getSpectatorManager() { return spectatorManager; }

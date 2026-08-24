@@ -6,6 +6,7 @@ import org.bukkit.entity.Player;
 import org.bukkit.potion.PotionEffect;
 import org.bukkit.potion.PotionEffectType;
 import org.bukkit.util.Vector;
+import org.bukkit.WorldBorder;
 import org.bukkit.scheduler.BukkitRunnable;
 import org.bukkit.scheduler.BukkitTask;
 
@@ -187,6 +188,9 @@ public class WagerManager {
 
         applyFreeze(sender, sender.getLocation());
         applyFreeze(target, target.getLocation());
+
+        applyBorder(sender, wager.getCenter(), wager.getBoundaryRadius());
+        applyBorder(target, wager.getCenter(), wager.getBoundaryRadius());
         startCountdown(wager, sender, target);
     }
 
@@ -270,8 +274,9 @@ public class WagerManager {
         }
 
         Player loserOnline = Bukkit.getPlayer(loserId);
-        if (loserOnline != null && !loserOnline.isDead()) {
-            restore(wager, loserOnline);
+        if (loserOnline != null) {
+            clearBorder(loserOnline);
+            if (!loserOnline.isDead()) restore(wager, loserOnline);
         }
 
         String winnerName = winner.getName() == null ? "Someone" : winner.getName();
@@ -284,6 +289,8 @@ public class WagerManager {
 
     public void restore(Wager wager, Player p) {
         UUID id = p.getUniqueId();
+        clearBorder(p);
+        releaseFreeze(id);
         if (wager.getMode().usesKit() && wager.getSavedInventory(id) != null) {
             p.getInventory().clear();
             p.getInventory().setContents(wager.getSavedInventory(id));
@@ -306,7 +313,10 @@ public class WagerManager {
         releaseFreeze(wager.getPlayer2());
         for (UUID id : List.of(wager.getPlayer1(), wager.getPlayer2())) {
             Player p = Bukkit.getPlayer(id);
-            if (p != null) msgs().send(p, messageKey);
+            if (p != null) {
+                clearBorder(p);
+                msgs().send(p, messageKey);
+            }
         }
     }
 
@@ -464,6 +474,35 @@ public class WagerManager {
         p.removePotionEffect(PotionEffectType.JUMP);
         p.setVelocity(new Vector(0, 0, 0));
         p.setFallDistance(0f);
+    }
+
+    /* ------------------------------------------------------------------ */
+    /* Match border                                                        */
+    /* ------------------------------------------------------------------ */
+
+    /**
+     * Give a player a personal world border around the fight. This is a real
+     * vanilla border, so the client itself blocks them from walking out and
+     * they see the red wall - far more reliable than cancelling move events.
+     */
+    public void applyBorder(Player p, Location center, double radius) {
+        if (!plugin.getConfig().getBoolean("match-border", true)) return;
+        if (center == null || center.getWorld() == null || radius <= 0) return;
+
+        WorldBorder border = Bukkit.createWorldBorder();
+        border.setCenter(center);
+        border.setSize(radius * 2);                 // size is the diameter
+        border.setWarningDistance(3);               // red vignette when close
+        border.setWarningTime(0);
+        border.setDamageAmount(0);                  // never kill, just block
+        border.setDamageBuffer(0);
+        p.setWorldBorder(border);
+    }
+
+    /** Put the player back on their world's normal border. */
+    public void clearBorder(Player p) {
+        if (p == null) return;
+        p.setWorldBorder(null);
     }
 
     public boolean isFrozen(UUID id) { return frozen.containsKey(id); }

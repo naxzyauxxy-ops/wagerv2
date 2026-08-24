@@ -13,6 +13,8 @@ import org.bukkit.event.Listener;
 import org.bukkit.event.entity.EntityDamageByEntityEvent;
 import org.bukkit.event.entity.EntityDamageEvent;
 import org.bukkit.event.entity.EntityRegainHealthEvent;
+import org.bukkit.event.block.BlockBreakEvent;
+import org.bukkit.event.block.BlockPlaceEvent;
 import org.bukkit.event.entity.EntityToggleGlideEvent;
 import org.bukkit.event.entity.PlayerDeathEvent;
 import org.bukkit.event.entity.ProjectileLaunchEvent;
@@ -124,6 +126,37 @@ public class FightListener implements Listener {
         if (em().isParticipantAlive(p.getUniqueId()) && em().getState() == EventManager.State.COUNTDOWN) {
             event.setCancelled(true);
         }
+    }
+
+    /**
+     * Arena protection: fighters can't grief. The one exception is Spleef,
+     * where breaking the snow floor is the whole point.
+     */
+    @EventHandler(ignoreCancelled = true)
+    public void onBreak(BlockBreakEvent event) {
+        Player p = event.getPlayer();
+        boolean inEvent = em().isParticipantAlive(p.getUniqueId());
+        if (!wm().isInWager(p.getUniqueId()) && !inEvent) return;
+
+        if (inEvent) {
+            MinigameManager.Game game = em().currentGame();
+            if (plugin.getMinigameManager().canBreak(p, event.getBlock(), game)) {
+                if (em().getState() != EventManager.State.RUNNING) {
+                    event.setCancelled(true);
+                }
+                return;
+            }
+        }
+        event.setCancelled(true);
+        plugin.getMessages().send(p, "no-building");
+    }
+
+    @EventHandler(ignoreCancelled = true)
+    public void onPlace(BlockPlaceEvent event) {
+        Player p = event.getPlayer();
+        if (!wm().isInWager(p.getUniqueId()) && !em().isParticipantAlive(p.getUniqueId())) return;
+        event.setCancelled(true);
+        plugin.getMessages().send(p, "no-building");
     }
 
     /** Knockback and explosions must not shove a frozen player off their spot. */
@@ -253,6 +286,16 @@ public class FightListener implements Listener {
         if (event.getTo().getY() >= w.getLossY()) return;
 
         wm().endFight(w, w.getOpponent(p.getUniqueId()), p.getUniqueId(), "knocked off");
+    }
+
+    /** Same ring-out rule for event fighters. */
+    @EventHandler(ignoreCancelled = true)
+    public void onEventRingOut(PlayerMoveEvent event) {
+        Player p = event.getPlayer();
+        if (!em().isParticipantAlive(p.getUniqueId())) return;
+        if (em().getState() != EventManager.State.RUNNING) return;
+        if (event.getTo() == null || event.getTo().getY() >= em().getLossY()) return;
+        em().eliminate(p, "knocked off");
     }
 
     /** No pearling, chorus-fruiting, or /tp-ing out of a fight. */

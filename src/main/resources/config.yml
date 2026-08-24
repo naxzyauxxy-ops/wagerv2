@@ -42,8 +42,10 @@ events:
   min-players: 2
   # Max fight length; if time runs out it's a draw (fees refunded)
   max-fight-seconds: 300
-  # Seconds per frame for the %wagers_event_animated% placeholder
-  animation-frame-seconds: 2
+  # Boss bar countdown at the top of the screen
+  bossbar: true
+  # How many seconds before an event the boss bar appears
+  bossbar-lead-seconds: 60
   # Events cycle through this list in order, then loop back to the top.
   # mode: CLASSIC, DIAMOND, NODEBUFF, SUMO, HARDCORE
   rotation:
@@ -63,6 +65,16 @@ events:
       mode: HARDCORE
       prize: 10000
       entry-fee: 100
+    - name: "&f&lSpleef Showdown"
+      mode: CLASSIC
+      game: SPLEEF
+      prize: 5000
+      entry-fee: 0
+    - name: "&6&lKing of the Hill"
+      mode: DIAMOND
+      game: KOTH
+      prize: 8000
+      entry-fee: 50
 
 # ---------------- Escape prevention ----------------
 # Controls ender pearls, chorus fruit, elytra, and /tp-style teleports.
@@ -130,3 +142,35 @@ fight-boundary-radius: 60
 # pulled back. Keep this small - spectator mode sees through blocks, so a large
 # value lets people scout bases while "watching" a fight.
 spectator-leash-radius: 25
+
+# Give each fighter a real vanilla world border around the match. The client
+# itself blocks them from walking out (red wall visible), which is far more
+# reliable than cancelling movement. Radius = fight-boundary-radius, or the
+# platform arena's radius + 8.
+match-border: true
+
+# ---------------- Minigames ----------------
+# Maps build themselves the first time they run - no schematics, no setup.
+# Just pick coordinates in empty space (high up is safest) and the plugin
+# does the rest. Anything already at those coordinates WILL be overwritten.
+minigames:
+  auto-build: true
+  blocks-per-tick: 150
+
+  SPLEEF:
+    world: "world"
+    x: 1000
+    y: 120
+    z: 1000
+    radius: 14
+
+  KOTH:
+    world: "world"
+    x: 1200
+    y: 120
+    z: 1200
+    radius: 16
+    # Size of the gold capture zone in the middle
+    hill-radius: 3
+    # Seconds a player must hold the hill alone to win
+    capture-seconds: 20

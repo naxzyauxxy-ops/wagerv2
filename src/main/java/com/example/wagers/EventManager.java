@@ -9,6 +9,9 @@ import org.bukkit.Bukkit;
 import org.bukkit.ChatColor;
 import org.bukkit.Location;
 import org.bukkit.Sound;
+import org.bukkit.boss.BarColor;
+import org.bukkit.boss.BarStyle;
+import org.bukkit.boss.BossBar;
 import org.bukkit.configuration.ConfigurationSection;
 import org.bukkit.entity.Player;
 import org.bukkit.inventory.ItemStack;
@@ -25,7 +28,8 @@ public class EventManager {
 
     public enum State { WAITING, JOINING, COUNTDOWN, RUNNING }
 
-    public record EventDef(String name, WagerMode mode, double prize, double entryFee) { }
+    public record EventDef(String name, WagerMode mode, double prize, double entryFee,
+                          MinigameManager.Game game) { }
 
     private final WagersPlugin plugin;
     private final List<EventDef> rotation = new ArrayList<>();
@@ -35,6 +39,10 @@ public class EventManager {
     private int secondsLeft;
     private int fightSecondsLeft;
     private int fightCountdown;
+    /** Fall below this and you're out (platform arenas only). */
+    private double eventLossY = Double.NEGATIVE_INFINITY;
+    /** KOTH: player -> seconds held on the hill. */
+    private final Map<UUID, Integer> hillTime = new HashMap<>();
 
     private final Set<UUID> participants = new LinkedHashSet<>();
     private final Set<UUID> alive = new HashSet<>();
@@ -44,6 +52,7 @@ public class EventManager {
     private double feePot = 0;
 
     private BukkitTask ticker;
+    private BossBar bossBar;
 
     public EventManager(WagersPlugin plugin) {
         this.plugin = plugin;
@@ -62,7 +71,10 @@ public class EventManager {
             if (mode == null) mode = WagerMode.CLASSIC;
             double prize = map.get("prize") instanceof Number n ? n.doubleValue() : 0;
             double fee = map.get("entry-fee") instanceof Number n ? n.doubleValue() : 0;
-            rotation.add(new EventDef(ChatColor.translateAlternateColorCodes('&', name), mode, prize, fee));
+            MinigameManager.Game game = MinigameManager.Game.match(
+                    map.get("game") == null ? null : String.valueOf(map.get("game")));
+            rotation.add(new EventDef(ChatColor.translateAlternateColorCodes('&', name),
+                    mode, prize, fee, game));
         }
         if (rotation.isEmpty()) {
             ConfigurationSection sec = plugin.getConfig().getConfigurationSection("events");
@@ -81,6 +93,7 @@ public class EventManager {
     /* ------------------------------------------------------------------ */
 
     private void tick() {
+        updateBossBar();
         switch (state) {
             case WAITING -> {
                 secondsLeft--;
@@ -118,6 +131,7 @@ public class EventManager {
             }
             case RUNNING -> {
                 fightSecondsLeft--;
+                tickKoth();
                 if (fightSecondsLeft <= 0) endDraw();
             }
         }
@@ -228,8 +242,16 @@ public class EventManager {
 
         Player any = Bukkit.getPlayer(participants.iterator().next());
         ArenaManager.Arena arena = plugin.getArenaManager().getArena(e.mode());
+        MinigameManager.Map3D gameMap = null;
+        if (e.game() != MinigameManager.Game.NONE) {
+            gameMap = plugin.getMinigameManager().getMap(e.game());
+        }
         Location center;
-        if (arena != null) {
+        if (gameMap != null) {
+            // Spleef eats its own floor, so rebuild the map every round
+            plugin.getMinigameManager().reset(e.game());
+            center = gameMap.center();
+        } else if (arena != null) {
             plugin.getArenaManager().ensureBuilt(e.mode());
             center = arena.center();
         } else {
@@ -241,6 +263,18 @@ public class EventManager {
             advance();
             return;
         }
+
+        double borderRadius;
+        if (gameMap != null) {
+            borderRadius = gameMap.radius + 6;
+            eventLossY = gameMap.lossY();
+        } else if (arena != null) {
+            borderRadius = arena.radius + 8;
+            eventLossY = arena.lossY();
+        } else {
+            borderRadius = plugin.getConfig().getDouble("fight-boundary-radius", 60);
+        }
+        hillTime.clear();
 
         alive.clear();
         alive.addAll(participants);
@@ -255,11 +289,22 @@ public class EventManager {
             savedArmor.put(id, p.getInventory().getArmorContents().clone());
             savedLoc.put(id, p.getLocation().clone());
 
+            if (gameMap != null) {
+                Location gameSpot = plugin.getMinigameManager()
+                        .spawns(gameMap, alive.size()).get(i++);
+                plugin.getWagerManager().safeTeleport(p, gameSpot);
+                plugin.getWagerManager().applyFreeze(p, p.getLocation());
+                plugin.getWagerManager().applyBorder(p, center, borderRadius);
+                if (e.mode().usesKit()) e.mode().applyKit(p);
+                plugin.getMinigameManager().applyKit(p, e.game());
+                continue;
+            }
             if (arena != null) {
                 Location arenaSpot = plugin.getArenaManager()
                         .spreadSpawns(arena, alive.size()).get(i++);
                 plugin.getWagerManager().safeTeleport(p, arenaSpot);
                 plugin.getWagerManager().applyFreeze(p, p.getLocation());
+                plugin.getWagerManager().applyBorder(p, center, borderRadius);
                 if (e.mode().usesKit()) e.mode().applyKit(p);
                 continue;
             }
@@ -276,6 +321,7 @@ public class EventManager {
             spot.setDirection(center.toVector().subtract(spot.toVector()));
             plugin.getWagerManager().safeTeleport(p, spot);
             plugin.getWagerManager().applyFreeze(p, p.getLocation());
+            plugin.getWagerManager().applyBorder(p, center, borderRadius);
             if (e.mode().usesKit()) e.mode().applyKit(p);
         }
 
@@ -341,11 +387,20 @@ public class EventManager {
 
     private void restoreOne(Player p) {
         UUID id = p.getUniqueId();
+        plugin.getWagerManager().clearBorder(p);
+        plugin.getWagerManager().releaseFreeze(id);
         EventDef e = current();
-        if (e != null && e.mode().usesKit() && savedInv.containsKey(id)) {
+        // Minigames hand out their own gear (Spleef shovel etc), so their
+        // items must be stripped too - not just kit-mode items.
+        boolean wasKitted = e != null
+                && (e.mode().usesKit() || e.game() != MinigameManager.Game.NONE);
+        if (wasKitted) {
             p.getInventory().clear();
-            p.getInventory().setContents(savedInv.get(id));
-            p.getInventory().setArmorContents(savedArmor.get(id));
+            p.getInventory().setArmorContents(null);
+            if (savedInv.containsKey(id)) {
+                p.getInventory().setContents(savedInv.get(id));
+                p.getInventory().setArmorContents(savedArmor.get(id));
+            }
         }
         p.removePotionEffect(org.bukkit.potion.PotionEffectType.HUNGER);
         Location back = savedLoc.get(id);
@@ -364,13 +419,16 @@ public class EventManager {
 
     /** Move to the next event in the rotation and restart the waiting timer. */
     private void advance() {
+        hideBossBar();
         plugin.getSpectatorManager().releaseWatchersOf(participants.toArray(new UUID[0]));
         state = State.WAITING;
+        eventLossY = Double.NEGATIVE_INFINITY;
         secondsLeft = plugin.getConfig().getInt("events.interval-seconds", 900);
         index = (index + 1) % Math.max(1, rotation.size());
         participants.clear();
         alive.clear();
         for (UUID id : alive) plugin.getWagerManager().releaseFreeze(id);
+        hillTime.clear();
         savedInv.clear();
         savedArmor.clear();
         savedLoc.clear();
@@ -380,6 +438,7 @@ public class EventManager {
 
     public void shutdown() {
         if (ticker != null) ticker.cancel();
+        hideBossBar();
         for (UUID id : new HashSet<>(alive)) {
             Player p = Bukkit.getPlayer(id);
             if (p != null) restoreOne(p);
@@ -388,10 +447,148 @@ public class EventManager {
     }
 
     /* ------------------------------------------------------------------ */
+    /* Boss bar                                                            */
+    /* ------------------------------------------------------------------ */
+
+    /** Big bar at the top of the screen counting down to the event. */
+    private void updateBossBar() {
+        if (!plugin.getConfig().getBoolean("events.bossbar", true)) {
+            hideBossBar();
+            return;
+        }
+        EventDef e = current();
+        if (e == null) {
+            hideBossBar();
+            return;
+        }
+        // Only show once the event is actually approaching
+        int showAt = plugin.getConfig().getInt("events.bossbar-lead-seconds", 60);
+        boolean show = switch (state) {
+            case WAITING -> secondsLeft <= showAt;
+            case JOINING, COUNTDOWN, RUNNING -> true;
+        };
+        if (!show) {
+            hideBossBar();
+            return;
+        }
+
+        if (bossBar == null) {
+            bossBar = Bukkit.createBossBar("", BarColor.YELLOW, BarStyle.SEGMENTED_10);
+        }
+
+        String title;
+        double progress;
+        BarColor color;
+        switch (state) {
+            case WAITING -> {
+                title = msgs().get("bossbar-waiting", null,
+                        "%event%", e.name(), "%time%", formatTime(secondsLeft),
+                        "%prize%", WagerManager.fmt(pot()));
+                progress = clamp01(1.0 - (double) secondsLeft / Math.max(1, showAt));
+                color = BarColor.YELLOW;
+            }
+            case JOINING -> {
+                int total = Math.max(1, plugin.getConfig().getInt("events.join-seconds", 60));
+                title = msgs().get("bossbar-joining", null,
+                        "%event%", e.name(), "%time%", formatTime(secondsLeft),
+                        "%players%", String.valueOf(participants.size()),
+                        "%prize%", WagerManager.fmt(pot()));
+                progress = clamp01((double) secondsLeft / total);
+                color = BarColor.GREEN;
+            }
+            case COUNTDOWN -> {
+                int total = Math.max(1, plugin.getConfig().getInt("countdown-seconds", 5));
+                title = msgs().get("bossbar-countdown", null,
+                        "%event%", e.name(), "%time%", formatTime(fightCountdown));
+                progress = clamp01((double) fightCountdown / total);
+                color = BarColor.RED;
+            }
+            default -> {
+                int total = Math.max(1, plugin.getConfig().getInt("events.max-fight-seconds", 300));
+                title = msgs().get("bossbar-running", null,
+                        "%event%", e.name(), "%players%", String.valueOf(alive.size()),
+                        "%time%", formatTime(fightSecondsLeft),
+                        "%prize%", WagerManager.fmt(pot()));
+                progress = clamp01((double) fightSecondsLeft / total);
+                color = BarColor.RED;
+            }
+        }
+
+        bossBar.setTitle(title);
+        bossBar.setColor(color);
+        bossBar.setProgress(progress);
+        bossBar.setVisible(true);
+
+        // Respect each player's message toggle; fighters always see it
+        for (Player p : Bukkit.getOnlinePlayers()) {
+            boolean eligible = alive.contains(p.getUniqueId())
+                    || participants.contains(p.getUniqueId())
+                    || plugin.getPlayerData().hasMessagesEnabled(p.getUniqueId());
+            boolean shown = bossBar.getPlayers().contains(p);
+            if (eligible && !shown) bossBar.addPlayer(p);
+            else if (!eligible && shown) bossBar.removePlayer(p);
+        }
+    }
+
+    private void hideBossBar() {
+        if (bossBar == null) return;
+        bossBar.removeAll();
+        bossBar.setVisible(false);
+    }
+
+    private static double clamp01(double v) {
+        return v < 0 ? 0 : (v > 1 ? 1 : v);
+    }
+
+    /** King of the Hill: hold the gold centre alone to build capture time. */
+    private void tickKoth() {
+        EventDef e = current();
+        if (e == null || e.game() != MinigameManager.Game.KOTH) return;
+        MinigameManager.Map3D map = plugin.getMinigameManager().getMap(MinigameManager.Game.KOTH);
+        if (map == null) return;
+
+        int hillR = plugin.getMinigameManager().hillRadius();
+        List<UUID> onHill = new ArrayList<>();
+        for (UUID id : alive) {
+            Player p = Bukkit.getPlayer(id);
+            if (p != null && map.insideHill(p.getLocation(), hillR)) onHill.add(id);
+        }
+        // Contested or empty hill: no progress
+        if (onHill.size() != 1) return;
+
+        UUID holder = onHill.get(0);
+        int need = plugin.getMinigameManager().kothCaptureSeconds();
+        int held = hillTime.merge(holder, 1, Integer::sum);
+
+        Player p = Bukkit.getPlayer(holder);
+        if (p != null && held < need) {
+            p.sendActionBar(net.kyori.adventure.text.Component.text(
+                    "\u00a76Capturing... \u00a7e" + held + "\u00a77/\u00a7e" + need));
+        }
+        if (held >= need && p != null) {
+            // Capture complete - everyone else is out, this player wins
+            for (UUID other : new HashSet<>(alive)) {
+                if (other.equals(holder)) continue;
+                Player op = Bukkit.getPlayer(other);
+                if (op != null) restoreOne(op);
+                alive.remove(other);
+            }
+            checkWin();
+        }
+    }
+
+    /* ------------------------------------------------------------------ */
     /* Placeholder + info accessors                                        */
     /* ------------------------------------------------------------------ */
 
     public State getState() { return state; }
+    public double getLossY() { return eventLossY; }
+
+    /** The minigame the current event runs, or NONE for a plain FFA. */
+    public MinigameManager.Game currentGame() {
+        EventDef e = current();
+        return e == null ? MinigameManager.Game.NONE : e.game();
+    }
     public boolean isParticipantAlive(UUID id) { return alive.contains(id); }
     public boolean isFrozen(UUID id) { return plugin.getWagerManager().isFrozen(id); }
 
@@ -425,23 +622,18 @@ public class EventManager {
     }
 
     /**
-     * Animated placeholder: cycles frames every `events.animation-frame-seconds`.
-     * Frame 1: event name  |  Frame 2: timer  |  (Frame 3 while joinable: JOIN hint)
+     * Event timer placeholder (%wagers_event_animated%). Shows the countdown
+     * only - no cycling between name/timer/join hint, so scoreboards stay
+     * readable. Use %wagers_event_name% alongside it if you want the name.
      */
     public String animatedFrame() {
-        EventDef e = current();
-        if (e == null) return "";
-        int frameSecs = Math.max(1, plugin.getConfig().getInt("events.animation-frame-seconds", 2));
-        int frames = (state == State.JOINING) ? 3 : 2;
-        long frame = (System.currentTimeMillis() / (frameSecs * 1000L)) % frames;
-        if (frame == 0) return e.name();
-        if (frame == 1) return switch (state) {
-            case WAITING -> "§7Next in §e" + formatTime(secondsLeft);
-            case JOINING -> "§aJoin: §e" + formatTime(secondsLeft);
-            case COUNTDOWN -> "§6Starting: §e" + formatTime(fightCountdown);
-            case RUNNING -> "§c§lLIVE §7(" + alive.size() + " left)";
+        if (current() == null) return "";
+        return switch (state) {
+            case WAITING -> "\u00a7e" + formatTime(secondsLeft);
+            case JOINING -> "\u00a7a" + formatTime(secondsLeft);
+            case COUNTDOWN -> "\u00a76" + formatTime(fightCountdown);
+            case RUNNING -> "\u00a7c\u00a7lLIVE";
         };
-        return "§a§l/wager join";
     }
 
     public static String formatTime(int totalSeconds) {

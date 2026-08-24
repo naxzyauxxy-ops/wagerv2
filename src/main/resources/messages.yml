@@ -157,3 +157,12 @@ help-bet: "%prefix%&e/wager bet <fighter> <amount> &7- back a fighter to win"
 boundary-reached: "%prefix%&cYou can't leave the fight area!"
 spectate-leashed: "%prefix%&cStay near the fight — you can't wander off while spectating."
 spectate-no-teleport: "%prefix%&cYou can't teleport while spectating. Use &e/wager spectate &cto stop."
+
+# Minigames
+no-building: "%prefix%&cYou can't build or break blocks here!"
+
+# Boss bar  |  %event% %time% %players% %prize%
+bossbar-waiting: "&e⚡ %event% &7starts in &f%time% &7• &6%prize%"
+bossbar-joining: "&a⚡ %event% &7• &fJOIN NOW &7• closes in &f%time% &7• &a%players% joined"
+bossbar-countdown: "&c⚡ %event% &7starting in &f%time%"
+bossbar-running: "&c⚡ %event% &7• &f%players% left &7• &6%prize% &7• &f%time%"

@@ -66,6 +66,14 @@ public class SpectatorManager {
 
         viewer.setGameMode(GameMode.SPECTATOR);
         viewer.teleport(target.getLocation());
+
+        Wager fight = plugin.getWagerManager().getWager(target.getUniqueId());
+        if (fight != null && fight.getCenter() != null) {
+            plugin.getWagerManager().applyBorder(viewer, fight.getCenter(), fight.getBoundaryRadius());
+        } else {
+            plugin.getWagerManager().applyBorder(viewer, target.getLocation(),
+                    plugin.getConfig().getDouble("spectator-leash-radius", 25));
+        }
         msgs().send(viewer, "spectate-started", "%player%", target.getName());
     }
 
@@ -76,6 +84,7 @@ public class SpectatorManager {
             if (notify) msgs().send(viewer, "spectate-not-spectating");
             return;
         }
+        plugin.getWagerManager().clearBorder(viewer);
         Snapshot snap = snapshots.remove(id);
         if (snap != null) {
             viewer.setGameMode(snap.gameMode());
