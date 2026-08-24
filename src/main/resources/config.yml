@@ -75,6 +75,11 @@ events:
       game: KOTH
       prize: 8000
       entry-fee: 50
+    - name: "&b&lTowers"
+      mode: CLASSIC
+      game: TOWERS
+      prize: 7500
+      entry-fee: 0
 
 # ---------------- Escape prevention ----------------
 # Controls ender pearls, chorus fruit, elytra, and /tp-style teleports.
@@ -163,6 +168,29 @@ minigames:
     y: 120
     z: 1000
     radius: 14
+
+  TOWERS:
+    world: "world"
+    x: 1400
+    y: 120
+    z: 1400
+    # Overall map size (towers sit near the edge, centre island in the middle)
+    radius: 22
+    # How many towers to build - cap on how many can play at once
+    tower-count: 8
+    # Size of each tower platform
+    tower-radius: 3
+    platform-material: END_STONE
+    # The block each player stands on - their generator
+    generator-material: IRON_BLOCK
+    # Seconds between generator drops
+    generator-seconds: 10
+    # What each generator produces per cycle, as MATERIAL:amount.
+    # Block items here are also what players may bridge with.
+    items:
+      - "WHITE_WOOL:16"
+      - "IRON_INGOT:3"
+      - "GOLDEN_APPLE:1"
 
   KOTH:
     world: "world"

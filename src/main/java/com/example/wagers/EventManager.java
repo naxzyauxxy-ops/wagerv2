@@ -43,6 +43,9 @@ public class EventManager {
     private double eventLossY = Double.NEGATIVE_INFINITY;
     /** KOTH: player -> seconds held on the hill. */
     private final Map<UUID, Integer> hillTime = new HashMap<>();
+    /** Towers: each player's generator block (the one they spawn on). */
+    private final Map<UUID, Location> towers = new HashMap<>();
+    private int generatorTick = 0;
 
     private final Set<UUID> participants = new LinkedHashSet<>();
     private final Set<UUID> alive = new HashSet<>();
@@ -132,6 +135,7 @@ public class EventManager {
             case RUNNING -> {
                 fightSecondsLeft--;
                 tickKoth();
+                tickGenerators();
                 if (fightSecondsLeft <= 0) endDraw();
             }
         }
@@ -290,8 +294,12 @@ public class EventManager {
             savedLoc.put(id, p.getLocation().clone());
 
             if (gameMap != null) {
-                Location gameSpot = plugin.getMinigameManager()
-                        .spawns(gameMap, alive.size()).get(i++);
+                Location gameSpot = (e.game() == MinigameManager.Game.TOWERS)
+                        ? plugin.getMinigameManager().towerSpawns(gameMap, alive.size()).get(i++)
+                        : plugin.getMinigameManager().spawns(gameMap, alive.size()).get(i++);
+                if (e.game() == MinigameManager.Game.TOWERS) {
+                    towers.put(id, gameSpot.clone().add(0, -1, 0));
+                }
                 plugin.getWagerManager().safeTeleport(p, gameSpot);
                 plugin.getWagerManager().applyFreeze(p, p.getLocation());
                 plugin.getWagerManager().applyBorder(p, center, borderRadius);
@@ -429,6 +437,9 @@ public class EventManager {
         alive.clear();
         for (UUID id : alive) plugin.getWagerManager().releaseFreeze(id);
         hillTime.clear();
+        towers.clear();
+        generatorTick = 0;
+        plugin.getMinigameManager().clearPlaced();
         savedInv.clear();
         savedArmor.clear();
         savedLoc.clear();
@@ -444,6 +455,22 @@ public class EventManager {
             if (p != null) restoreOne(p);
         }
         refundFees();
+    }
+
+    /** Towers: every generator spits out items on its own timer. */
+    private void tickGenerators() {
+        EventDef e = current();
+        if (e == null || e.game() != MinigameManager.Game.TOWERS) return;
+        if (towers.isEmpty()) return;
+
+        generatorTick++;
+        if (generatorTick < plugin.getMinigameManager().generatorSeconds()) return;
+        generatorTick = 0;
+
+        for (UUID id : alive) {
+            Location gen = towers.get(id);
+            if (gen != null) plugin.getMinigameManager().runGenerator(gen);
+        }
     }
 
     /* ------------------------------------------------------------------ */

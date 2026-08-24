@@ -28,7 +28,8 @@ public class MinigameManager {
     public enum Game {
         NONE("FFA", "Last player standing"),
         SPLEEF("Spleef", "Break the floor, don't fall"),
-        KOTH("King of the Hill", "Hold the centre to win");
+        KOTH("King of the Hill", "Hold the centre to win"),
+        TOWERS("Towers", "Generators feed you gear - bridge and fight");
 
         private final String display, description;
 
@@ -82,6 +83,8 @@ public class MinigameManager {
     private final WagersPlugin plugin;
     private final java.util.Map<Game, Map3D> maps = new EnumMap<>(Game.class);
     private final Set<Game> built = new HashSet<>();
+    /** Blocks players placed this round, so the map can be cleaned up after. */
+    private final List<Block> placedBlocks = new ArrayList<>();
 
     public MinigameManager(WagersPlugin plugin) {
         this.plugin = plugin;
@@ -120,6 +123,63 @@ public class MinigameManager {
         return Math.max(1, plugin.getConfig().getInt("minigames.KOTH.hill-radius", 3));
     }
 
+    /** Seconds between generator drops. */
+    public int generatorSeconds() {
+        return Math.max(1, plugin.getConfig().getInt("minigames.TOWERS.generator-seconds", 10));
+    }
+
+    /** Items a generator produces each cycle, parsed from "MATERIAL:amount". */
+    public List<ItemStack> generatorItems() {
+        List<ItemStack> out = new ArrayList<>();
+        List<String> raw = plugin.getConfig().getStringList("minigames.TOWERS.items");
+        if (raw.isEmpty()) raw = List.of("WHITE_WOOL:16", "IRON_INGOT:3");
+        for (String entry : raw) {
+            String[] parts = entry.split(":");
+            Material mat = Material.matchMaterial(parts[0].trim());
+            if (mat == null) continue;
+            int amount = 1;
+            if (parts.length > 1) {
+                try {
+                    amount = Math.max(1, Integer.parseInt(parts[1].trim()));
+                } catch (NumberFormatException ignored) { }
+            }
+            out.add(new ItemStack(mat, amount));
+        }
+        return out;
+    }
+
+    /** Block materials players are allowed to place and break during Towers. */
+    public Set<Material> buildableMaterials() {
+        Set<Material> out = new HashSet<>();
+        for (ItemStack item : generatorItems()) {
+            if (item.getType().isBlock()) out.add(item.getType());
+        }
+        if (out.isEmpty()) out.add(Material.WHITE_WOOL);
+        return out;
+    }
+
+    /** Drop one generator cycle at the given spot. */
+    public void runGenerator(Location at) {
+        if (at == null || at.getWorld() == null) return;
+        Location spawnAt = at.clone().add(0, 1, 0);
+        for (ItemStack item : generatorItems()) {
+            at.getWorld().dropItem(spawnAt, item.clone()).setPickupDelay(10);
+        }
+        at.getWorld().playSound(spawnAt, org.bukkit.Sound.ENTITY_ITEM_PICKUP, 0.6f, 1.6f);
+    }
+
+    public void recordPlaced(Block block) {
+        placedBlocks.add(block);
+    }
+
+    /** Wipe everything players built this round. */
+    public void clearPlaced() {
+        for (Block b : placedBlocks) {
+            if (buildableMaterials().contains(b.getType())) b.setType(Material.AIR, false);
+        }
+        placedBlocks.clear();
+    }
+
     public int kothCaptureSeconds() {
         return Math.max(3, plugin.getConfig().getInt("minigames.KOTH.capture-seconds", 20));
     }
@@ -130,6 +190,11 @@ public class MinigameManager {
         if (map == null || built.contains(game)) return;
         built.add(game);
         if (!plugin.getConfig().getBoolean("minigames.auto-build", true)) return;
+
+        if (game == Game.TOWERS) {
+            buildTowers(map);
+            return;
+        }
 
         Material floor = switch (game) {
             case SPLEEF -> Material.SNOW_BLOCK;
@@ -194,6 +259,115 @@ public class MinigameManager {
         }.runTaskTimer(plugin, 1L, 1L);
     }
 
+    /**
+     * Towers map: a ring of small floating platforms (one per player slot),
+     * each with a generator block in the middle, plus a contested centre island.
+     */
+    private void buildTowers(Map3D map) {
+        int towers = Math.max(2, Math.min(16,
+                plugin.getConfig().getInt("minigames.TOWERS.tower-count", 8)));
+        int tRadius = Math.max(1, plugin.getConfig().getInt("minigames.TOWERS.tower-radius", 3));
+
+        List<Block> place = new ArrayList<>();
+        List<Block> clear = new ArrayList<>();
+        List<Location> towerCenters = towerSpots(map, towers);
+
+        for (Location spot : towerCenters) {
+            int cx = spot.getBlockX(), cz = spot.getBlockZ();
+            for (int dx = -tRadius; dx <= tRadius; dx++) {
+                for (int dz = -tRadius; dz <= tRadius; dz++) {
+                    if (dx * dx + dz * dz > tRadius * tRadius) continue;
+                    place.add(map.world.getBlockAt(cx + dx, map.y, cz + dz));
+                    for (int dy = 1; dy <= 5; dy++) {
+                        Block above = map.world.getBlockAt(cx + dx, map.y + dy, cz + dz);
+                        if (above.getType() != Material.AIR) clear.add(above);
+                    }
+                }
+            }
+        }
+        // Centre island
+        for (int dx = -tRadius; dx <= tRadius; dx++) {
+            for (int dz = -tRadius; dz <= tRadius; dz++) {
+                if (dx * dx + dz * dz > tRadius * tRadius) continue;
+                place.add(map.world.getBlockAt(map.x + dx, map.y, map.z + dz));
+                for (int dy = 1; dy <= 5; dy++) {
+                    Block above = map.world.getBlockAt(map.x + dx, map.y + dy, map.z + dz);
+                    if (above.getType() != Material.AIR) clear.add(above);
+                }
+            }
+        }
+
+        Material platform = Material.matchMaterial(
+                plugin.getConfig().getString("minigames.TOWERS.platform-material", "END_STONE"));
+        if (platform == null || !platform.isBlock()) platform = Material.END_STONE;
+        Material genBlock = Material.matchMaterial(
+                plugin.getConfig().getString("minigames.TOWERS.generator-material", "IRON_BLOCK"));
+        if (genBlock == null || !genBlock.isBlock()) genBlock = Material.IRON_BLOCK;
+
+        final int perTick = Math.max(20, plugin.getConfig().getInt("minigames.blocks-per-tick", 150));
+        final Material plat = platform, gen = genBlock;
+        plugin.getLogger().info("Building Towers map (" + towers + " towers, "
+                + (place.size() + clear.size()) + " blocks)...");
+
+        new BukkitRunnable() {
+            int pi = 0, ci = 0;
+
+            @Override
+            public void run() {
+                int budget = perTick;
+                while (budget > 0 && ci < clear.size()) {
+                    clear.get(ci++).setType(Material.AIR, false);
+                    budget--;
+                }
+                while (budget > 0 && pi < place.size()) {
+                    place.get(pi++).setType(plat, false);
+                    budget--;
+                }
+                if (pi >= place.size() && ci >= clear.size()) {
+                    // Generator block sits in the middle of each tower - the
+                    // block the player stands on.
+                    for (Location spot : towerCenters) {
+                        map.world.getBlockAt(spot.getBlockX(), map.y, spot.getBlockZ())
+                                .setType(gen, false);
+                    }
+                    plugin.getLogger().info("Towers map ready.");
+                    cancel();
+                }
+            }
+        }.runTaskTimer(plugin, 1L, 1L);
+    }
+
+    /** Evenly spaced tower centres around the map. */
+    public List<Location> towerSpots(Map3D map, int count) {
+        List<Location> out = new ArrayList<>();
+        double ring = Math.max(4, map.radius - 3);
+        for (int i = 0; i < count; i++) {
+            double angle = (2 * Math.PI / Math.max(1, count)) * i;
+            out.add(new Location(map.world,
+                    map.x + Math.round(Math.cos(angle) * ring),
+                    map.y,
+                    map.z + Math.round(Math.sin(angle) * ring)));
+        }
+        return out;
+    }
+
+    /** Where each Towers player spawns: standing on their generator. */
+    public List<Location> towerSpawns(Map3D map, int count) {
+        int towers = Math.max(count, Math.min(16,
+                plugin.getConfig().getInt("minigames.TOWERS.tower-count", 8)));
+        List<Location> spots = towerSpots(map, towers);
+        List<Location> out = new ArrayList<>();
+        Location center = map.center();
+        for (int i = 0; i < count; i++) {
+            Location base = spots.get(i % spots.size());
+            Location spawn = new Location(map.world,
+                    base.getX() + 0.5, map.y + 1, base.getZ() + 0.5);
+            spawn.setDirection(center.toVector().subtract(spawn.toVector()));
+            out.add(spawn);
+        }
+        return out;
+    }
+
     /** Rebuild a map mid-rotation (Spleef floors get eaten every round). */
     public void reset(Game game) {
         built.remove(game);
@@ -226,11 +400,33 @@ public class MinigameManager {
             shovel.addUnsafeEnchantment(Enchantment.DIG_SPEED, 5);
             p.getInventory().setItem(0, shovel);
         }
+        if (game == Game.TOWERS) {
+            p.getInventory().clear();
+            p.getInventory().setArmorContents(null);
+            p.getInventory().setItem(0, new ItemStack(Material.STONE_SWORD));
+            p.getInventory().setItem(1, new ItemStack(Material.WHITE_WOOL, 32));
+            p.getInventory().setItem(8, new ItemStack(Material.COOKED_BEEF, 8));
+            p.getInventory().setHelmet(new ItemStack(Material.LEATHER_HELMET));
+            p.getInventory().setChestplate(new ItemStack(Material.LEATHER_CHESTPLATE));
+        }
         // KOTH just uses the event's own WagerMode kit
+    }
+
+    /** Towers: players may bridge with generator blocks inside the map only. */
+    public boolean canBuild(Block block, Game game) {
+        if (game != Game.TOWERS) return false;
+        Map3D map = maps.get(Game.TOWERS);
+        if (map == null || !block.getWorld().equals(map.world)) return false;
+        if (!buildableMaterials().contains(block.getType())) return false;
+        if (block.getY() < map.y - 20 || block.getY() > map.y + 30) return false;
+        double dx = block.getX() - map.x, dz = block.getZ() - map.z;
+        return dx * dx + dz * dz <= (double) map.radius * map.radius;
     }
 
     /** Only snow may be broken, only in Spleef, only inside the map. */
     public boolean canBreak(Player p, Block block, Game game) {
+        // Towers: you may only break blocks players bridged with
+        if (game == Game.TOWERS) return canBuild(block, game);
         if (game != Game.SPLEEF) return false;
         Map3D map = maps.get(Game.SPLEEF);
         if (map == null) return false;

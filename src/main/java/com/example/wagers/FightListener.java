@@ -154,7 +154,15 @@ public class FightListener implements Listener {
     @EventHandler(ignoreCancelled = true)
     public void onPlace(BlockPlaceEvent event) {
         Player p = event.getPlayer();
-        if (!wm().isInWager(p.getUniqueId()) && !em().isParticipantAlive(p.getUniqueId())) return;
+        boolean inEvent = em().isParticipantAlive(p.getUniqueId());
+        if (!wm().isInWager(p.getUniqueId()) && !inEvent) return;
+
+        if (inEvent && em().getState() == EventManager.State.RUNNING
+                && plugin.getMinigameManager().canBuild(event.getBlock(), em().currentGame())) {
+            // Track it so the map can be cleaned up when the round ends
+            plugin.getMinigameManager().recordPlaced(event.getBlock());
+            return;
+        }
         event.setCancelled(true);
         plugin.getMessages().send(p, "no-building");
     }
