@@ -49,7 +49,7 @@ public class WagersPlugin extends JavaPlugin {
         }
 
         getLogger().info("=====================================");
-        getLogger().info(" WagersPlugin v" + getDescription().getVersion() + " BUILD 10 (towers + generators)");
+        getLogger().info(" WagersPlugin v" + getDescription().getVersion() + " BUILD 11 (skywars/sumo/bedwars/parkour)");
         getLogger().info(" Modes: " + WagerMode.list());
         getLogger().info(" If this line is missing from your log, the");
         getLogger().info(" server is running an OLD jar.");

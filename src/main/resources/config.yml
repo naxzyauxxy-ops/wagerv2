@@ -49,35 +49,24 @@ events:
   # Events cycle through this list in order, then loop back to the top.
   # mode: CLASSIC, DIAMOND, NODEBUFF, SUMO, HARDCORE
   rotation:
-    - name: "&b&lDiamond FFA"
-      mode: DIAMOND
-      prize: 5000
-      entry-fee: 0
-    - name: "&e&lSumo Showdown"
-      mode: SUMO
-      prize: 2500
-      entry-fee: 0
-    - name: "&d&lNoDebuff Rumble"
-      mode: NODEBUFF
-      prize: 7500
-      entry-fee: 50
-    - name: "&c&lHardcore Last Stand"
-      mode: HARDCORE
+    - name: "&b&lSkywars"
+      mode: CLASSIC
+      game: SKYWARS
       prize: 10000
-      entry-fee: 100
-    - name: "&f&lSpleef Showdown"
+      entry-fee: 0
+    - name: "&e&lSumo"
       mode: CLASSIC
-      game: SPLEEF
+      game: SUMO
       prize: 5000
       entry-fee: 0
-    - name: "&6&lKing of the Hill"
-      mode: DIAMOND
-      game: KOTH
-      prize: 8000
-      entry-fee: 50
-    - name: "&b&lTowers"
+    - name: "&c&lBed Wars"
       mode: CLASSIC
-      game: TOWERS
+      game: BEDWARS
+      prize: 15000
+      entry-fee: 100
+    - name: "&a&lParkour"
+      mode: CLASSIC
+      game: PARKOUR
       prize: 7500
       entry-fee: 0
 
@@ -110,15 +99,8 @@ arenas:
   # Blocks placed per tick while building (lower = slower but gentler on TPS)
   blocks-per-tick: 150
 
-  SUMO:
-    type: PLATFORM
-    world: world_the_end
-    x: 200
-    y: 60
-    z: 200
-    radius: 7
-    material: OBSIDIAN
-    void-death: true
+  # Sumo now runs as an event minigame (see the minigames section below),
+  # so wager fights in SUMO mode use RTP unless you add a PLATFORM arena here.
 
   HARDCORE:
     type: PLATFORM
@@ -156,49 +138,66 @@ match-border: true
 
 # ---------------- Minigames ----------------
 # Maps build themselves the first time they run - no schematics, no setup.
-# Just pick coordinates in empty space (high up is safest) and the plugin
-# does the rest. Anything already at those coordinates WILL be overwritten.
+# Pick coordinates in EMPTY space (high up over ocean is safest).
+# ANYTHING ALREADY AT THESE COORDINATES WILL BE OVERWRITTEN.
 minigames:
   auto-build: true
   blocks-per-tick: 150
 
-  SPLEEF:
+  SKYWARS:
     world: "world"
     x: 1000
     y: 120
     z: 1000
-    radius: 14
+    radius: 26
+    island-count: 8        # also the player cap
+    island-radius: 4
+    island-material: GRASS_BLOCK
+    chest-items: 5         # random items per chest
+    loot:
+      - "STONE_SWORD:1"
+      - "IRON_SWORD:1"
+      - "LEATHER_CHESTPLATE:1"
+      - "IRON_HELMET:1"
+      - "GOLDEN_APPLE:2"
+      - "COOKED_BEEF:8"
+      - "OAK_PLANKS:32"
+      - "BOW:1"
+      - "ARROW:8"
+      - "ENDER_PEARL:1"
+      - "IRON_PICKAXE:1"
 
-  TOWERS:
+  SUMO:
+    world: "world"
+    x: 1200
+    y: 120
+    z: 1200
+    radius: 8
+    material: OBSIDIAN
+
+  BEDWARS:
     world: "world"
     x: 1400
     y: 120
     z: 1400
-    # Overall map size (towers sit near the edge, centre island in the middle)
-    radius: 22
-    # How many towers to build - cap on how many can play at once
-    tower-count: 8
-    # Size of each tower platform
-    tower-radius: 3
-    platform-material: END_STONE
-    # The block each player stands on - their generator
+    radius: 26
+    island-count: 8        # also the player cap
+    island-radius: 5
+    island-material: SANDSTONE
+    bed-material: RED_BED
     generator-material: IRON_BLOCK
-    # Seconds between generator drops
     generator-seconds: 10
-    # What each generator produces per cycle, as MATERIAL:amount.
-    # Block items here are also what players may bridge with.
     items:
       - "WHITE_WOOL:16"
       - "IRON_INGOT:3"
       - "GOLDEN_APPLE:1"
 
-  KOTH:
+  PARKOUR:
     world: "world"
-    x: 1200
+    x: 1600
     y: 120
-    z: 1200
-    radius: 16
-    # Size of the gold capture zone in the middle
-    hill-radius: 3
-    # Seconds a player must hold the hill alone to win
-    capture-seconds: 20
+    z: 1600
+    radius: 60             # must be big - the course wanders
+    jumps: 20
+    material: QUARTZ_BLOCK
+    finish-material: GOLD_BLOCK

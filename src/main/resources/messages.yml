@@ -166,3 +166,13 @@ bossbar-waiting: "&e⚡ %event% &7starts in &f%time% &7• &6%prize%"
 bossbar-joining: "&a⚡ %event% &7• &fJOIN NOW &7• closes in &f%time% &7• &a%players% joined"
 bossbar-countdown: "&c⚡ %event% &7starting in &f%time%"
 bossbar-running: "&c⚡ %event% &7• &f%players% left &7• &6%prize% &7• &f%time%"
+
+# Bed Wars  |  %player% %breaker%
+bed-broken: "%prefix%&c&l✖ &e%player%&7's bed was destroyed by &e%breaker%&7!"
+bed-lost-title: "&c&lBED DESTROYED"
+bed-lost-subtitle: "&7You no longer respawn!"
+bed-respawned: "%prefix%&aRespawned! &7Your bed saved you."
+bed-own: "%prefix%&cYou can't break your own bed!"
+
+# Parkour
+parkour-fell: "%prefix%&7You fell — back to the start!"

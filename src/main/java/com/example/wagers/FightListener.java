@@ -98,6 +98,14 @@ public class FightListener implements Listener {
             return;
         }
 
+        // Parkour is a race, not a fight
+        if (em().currentGame() == MinigameManager.Game.PARKOUR
+                && (em().isParticipantAlive(victim.getUniqueId())
+                    || em().isParticipantAlive(attacker.getUniqueId()))) {
+            event.setCancelled(true);
+            return;
+        }
+
         // Event rules: alive participants only fight each other, and only once RUNNING
         boolean victimInEvent = em().isParticipantAlive(victim.getUniqueId());
         boolean attackerInEvent = em().isParticipantAlive(attacker.getUniqueId());
@@ -138,14 +146,25 @@ public class FightListener implements Listener {
         boolean inEvent = em().isParticipantAlive(p.getUniqueId());
         if (!wm().isInWager(p.getUniqueId()) && !inEvent) return;
 
-        if (inEvent) {
+        if (inEvent && em().getState() == EventManager.State.RUNNING) {
             MinigameManager.Game game = em().currentGame();
-            if (plugin.getMinigameManager().canBreak(p, event.getBlock(), game)) {
-                if (em().getState() != EventManager.State.RUNNING) {
-                    event.setCancelled(true);
+
+            // Bed Wars: smashing a bed removes its owner's respawn
+            if (game == MinigameManager.Game.BEDWARS) {
+                UUID owner = em().bedOwner(event.getBlock());
+                if (owner != null) {
+                    if (owner.equals(p.getUniqueId())) {
+                        event.setCancelled(true);
+                        plugin.getMessages().send(p, "bed-own");
+                        return;
+                    }
+                    event.setCancelled(true);   // we remove both halves ourselves
+                    em().breakBed(owner, p);
+                    return;
                 }
-                return;
             }
+            // Bridging blocks may be broken back down
+            if (plugin.getMinigameManager().canBuild(event.getBlock(), game)) return;
         }
         event.setCancelled(true);
         plugin.getMessages().send(p, "no-building");
@@ -195,6 +214,8 @@ public class FightListener implements Listener {
             event.getDrops().clear();
             event.setKeepLevel(true);
             event.setDroppedExp(0);
+            // Bed Wars: your bed is your extra life
+            if (em().respawnIfPossible(dead)) return;
             em().eliminate(dead, "killed");
             return;
         }
@@ -303,6 +324,9 @@ public class FightListener implements Listener {
         if (!em().isParticipantAlive(p.getUniqueId())) return;
         if (em().getState() != EventManager.State.RUNNING) return;
         if (event.getTo() == null || event.getTo().getY() >= em().getLossY()) return;
+
+        // Parkour: falling just sends you back to the start
+        if (em().sendToStart(p)) return;
         em().eliminate(p, "knocked off");
     }
 

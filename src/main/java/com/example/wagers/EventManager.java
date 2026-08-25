@@ -41,10 +41,12 @@ public class EventManager {
     private int fightCountdown;
     /** Fall below this and you're out (platform arenas only). */
     private double eventLossY = Double.NEGATIVE_INFINITY;
-    /** KOTH: player -> seconds held on the hill. */
-    private final Map<UUID, Integer> hillTime = new HashMap<>();
-    /** Towers: each player's generator block (the one they spawn on). */
-    private final Map<UUID, Location> towers = new HashMap<>();
+    /** Each player's island spawn (Skywars / Bed Wars). */
+    private final Map<UUID, Location> islands = new HashMap<>();
+    /** Bed Wars: player -> their bed's foot block. */
+    private final Map<UUID, org.bukkit.block.Block> beds = new HashMap<>();
+    /** Bed Wars: players whose bed still stands, so they respawn on death. */
+    private final Set<UUID> bedIntact = new HashSet<>();
     private int generatorTick = 0;
 
     private final Set<UUID> participants = new LinkedHashSet<>();
@@ -134,8 +136,7 @@ public class EventManager {
             }
             case RUNNING -> {
                 fightSecondsLeft--;
-                tickKoth();
-                tickGenerators();
+                tickMinigame();
                 if (fightSecondsLeft <= 0) endDraw();
             }
         }
@@ -278,7 +279,6 @@ public class EventManager {
         } else {
             borderRadius = plugin.getConfig().getDouble("fight-boundary-radius", 60);
         }
-        hillTime.clear();
 
         alive.clear();
         alive.addAll(participants);
@@ -294,11 +294,15 @@ public class EventManager {
             savedLoc.put(id, p.getLocation().clone());
 
             if (gameMap != null) {
-                Location gameSpot = (e.game() == MinigameManager.Game.TOWERS)
-                        ? plugin.getMinigameManager().towerSpawns(gameMap, alive.size()).get(i++)
-                        : plugin.getMinigameManager().spawns(gameMap, alive.size()).get(i++);
-                if (e.game() == MinigameManager.Game.TOWERS) {
-                    towers.put(id, gameSpot.clone().add(0, -1, 0));
+                Location gameSpot = plugin.getMinigameManager()
+                        .spawns(e.game(), gameMap, alive.size()).get(i++);
+                if (e.game() == MinigameManager.Game.SKYWARS
+                        || e.game() == MinigameManager.Game.BEDWARS) {
+                    islands.put(id, gameSpot.clone());
+                }
+                if (e.game() == MinigameManager.Game.BEDWARS) {
+                    beds.put(id, plugin.getMinigameManager().placeBed(gameMap, gameSpot));
+                    bedIntact.add(id);
                 }
                 plugin.getWagerManager().safeTeleport(p, gameSpot);
                 plugin.getWagerManager().applyFreeze(p, p.getLocation());
@@ -436,8 +440,9 @@ public class EventManager {
         participants.clear();
         alive.clear();
         for (UUID id : alive) plugin.getWagerManager().releaseFreeze(id);
-        hillTime.clear();
-        towers.clear();
+        islands.clear();
+        beds.clear();
+        bedIntact.clear();
         generatorTick = 0;
         plugin.getMinigameManager().clearPlaced();
         savedInv.clear();
@@ -457,20 +462,122 @@ public class EventManager {
         refundFees();
     }
 
-    /** Towers: every generator spits out items on its own timer. */
-    private void tickGenerators() {
+
+    /* ------------------------------------------------------------------ */
+    /* Minigame logic                                                      */
+    /* ------------------------------------------------------------------ */
+
+    /** Runs once a second while a round is live. */
+    private void tickMinigame() {
         EventDef e = current();
-        if (e == null || e.game() != MinigameManager.Game.TOWERS) return;
-        if (towers.isEmpty()) return;
+        if (e == null) return;
 
-        generatorTick++;
-        if (generatorTick < plugin.getMinigameManager().generatorSeconds()) return;
-        generatorTick = 0;
-
-        for (UUID id : alive) {
-            Location gen = towers.get(id);
-            if (gen != null) plugin.getMinigameManager().runGenerator(gen);
+        if (e.game() == MinigameManager.Game.BEDWARS && !islands.isEmpty()) {
+            generatorTick++;
+            if (generatorTick >= plugin.getMinigameManager().generatorSeconds()) {
+                generatorTick = 0;
+                for (UUID id : alive) {
+                    Location island = islands.get(id);
+                    if (island != null) {
+                        plugin.getMinigameManager().runGenerator(island.clone().add(2, -1, 0));
+                    }
+                }
+            }
         }
+
+        if (e.game() == MinigameManager.Game.PARKOUR) {
+            MinigameManager.Map3D map =
+                    plugin.getMinigameManager().getMap(MinigameManager.Game.PARKOUR);
+            if (map == null) return;
+            Location finish = plugin.getMinigameManager().parkourFinish(map);
+
+            for (UUID id : new HashSet<>(alive)) {
+                Player p = Bukkit.getPlayer(id);
+                if (p == null || !p.getWorld().equals(finish.getWorld())) continue;
+                if (p.getLocation().distanceSquared(finish) > 4.0) continue;
+
+                // First to the finish wins - everyone else is out
+                for (UUID other : new HashSet<>(alive)) {
+                    if (other.equals(id)) continue;
+                    Player op = Bukkit.getPlayer(other);
+                    if (op != null) restoreOne(op);
+                    alive.remove(other);
+                }
+                checkWin();
+                return;
+            }
+        }
+    }
+
+    /** Is this block someone's bed? Returns the owner, or null. */
+    public UUID bedOwner(org.bukkit.block.Block block) {
+        for (Map.Entry<UUID, org.bukkit.block.Block> entry : beds.entrySet()) {
+            org.bukkit.block.Block foot = entry.getValue();
+            if (foot == null) continue;
+            if (foot.getWorld().equals(block.getWorld())
+                    && Math.abs(foot.getX() - block.getX()) <= 1
+                    && foot.getY() == block.getY()
+                    && Math.abs(foot.getZ() - block.getZ()) <= 1) {
+                return entry.getKey();
+            }
+        }
+        return null;
+    }
+
+    public boolean hasBed(UUID id) {
+        return bedIntact.contains(id);
+    }
+
+    /** Someone smashed a bed: its owner loses their respawn. */
+    public void breakBed(UUID ownerId, Player breaker) {
+        if (!bedIntact.remove(ownerId)) return;
+        plugin.getMinigameManager().destroyBed(beds.get(ownerId));
+
+        String ownerName = String.valueOf(Bukkit.getOfflinePlayer(ownerId).getName());
+        broadcastToggleable("bed-broken",
+                "%player%", ownerName,
+                "%breaker%", breaker == null ? "?" : breaker.getName());
+
+        Player owner = Bukkit.getPlayer(ownerId);
+        if (owner != null) {
+            owner.sendTitle(msgs().get("bed-lost-title", owner),
+                    msgs().get("bed-lost-subtitle", owner), 5, 50, 10);
+            owner.playSound(owner.getLocation(), Sound.ENTITY_ENDER_DRAGON_GROWL, 1f, 0.7f);
+        }
+    }
+
+    /** Bed Wars death with a bed still standing: respawn instead of eliminate. */
+    public boolean respawnIfPossible(Player p) {
+        EventDef e = current();
+        if (e == null || e.game() != MinigameManager.Game.BEDWARS) return false;
+        UUID id = p.getUniqueId();
+        if (!alive.contains(id) || !bedIntact.contains(id)) return false;
+
+        Location island = islands.get(id);
+        if (island == null) return false;
+
+        Bukkit.getScheduler().runTaskLater(plugin, () -> {
+            Player back = Bukkit.getPlayer(id);
+            if (back == null || !alive.contains(id)) return;
+            plugin.getWagerManager().safeTeleport(back, island);
+            plugin.getMinigameManager().applyKit(back, MinigameManager.Game.BEDWARS);
+            msgs().send(back, "bed-respawned");
+        }, 2L);
+        return true;
+    }
+
+    /** Parkour fall: back to the start, no elimination. */
+    public boolean sendToStart(Player p) {
+        EventDef e = current();
+        if (e == null || e.game() != MinigameManager.Game.PARKOUR) return false;
+        MinigameManager.Map3D map =
+                plugin.getMinigameManager().getMap(MinigameManager.Game.PARKOUR);
+        if (map == null) return false;
+
+        plugin.getWagerManager().safeTeleport(p, plugin.getMinigameManager().parkourStart(map));
+        p.setFallDistance(0f);
+        msgs().send(p, "parkour-fell");
+        return true;
     }
 
     /* ------------------------------------------------------------------ */
@@ -567,42 +674,6 @@ public class EventManager {
         return v < 0 ? 0 : (v > 1 ? 1 : v);
     }
 
-    /** King of the Hill: hold the gold centre alone to build capture time. */
-    private void tickKoth() {
-        EventDef e = current();
-        if (e == null || e.game() != MinigameManager.Game.KOTH) return;
-        MinigameManager.Map3D map = plugin.getMinigameManager().getMap(MinigameManager.Game.KOTH);
-        if (map == null) return;
-
-        int hillR = plugin.getMinigameManager().hillRadius();
-        List<UUID> onHill = new ArrayList<>();
-        for (UUID id : alive) {
-            Player p = Bukkit.getPlayer(id);
-            if (p != null && map.insideHill(p.getLocation(), hillR)) onHill.add(id);
-        }
-        // Contested or empty hill: no progress
-        if (onHill.size() != 1) return;
-
-        UUID holder = onHill.get(0);
-        int need = plugin.getMinigameManager().kothCaptureSeconds();
-        int held = hillTime.merge(holder, 1, Integer::sum);
-
-        Player p = Bukkit.getPlayer(holder);
-        if (p != null && held < need) {
-            p.sendActionBar(net.kyori.adventure.text.Component.text(
-                    "\u00a76Capturing... \u00a7e" + held + "\u00a77/\u00a7e" + need));
-        }
-        if (held >= need && p != null) {
-            // Capture complete - everyone else is out, this player wins
-            for (UUID other : new HashSet<>(alive)) {
-                if (other.equals(holder)) continue;
-                Player op = Bukkit.getPlayer(other);
-                if (op != null) restoreOne(op);
-                alive.remove(other);
-            }
-            checkWin();
-        }
-    }
 
     /* ------------------------------------------------------------------ */
     /* Placeholder + info accessors                                        */
